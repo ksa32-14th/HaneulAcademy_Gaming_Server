@@ -189,7 +189,7 @@ body.dmSplit #bigmap{left:27vw}
 /* the virtual joystick sits where #meds normally does, and the button cluster covers the usual
    weapon-slot corner - push both HUD elements clear of the touch controls */
 body.touch #meds{bottom:160px}
-body.touch #weapons{bottom:260px}
+body.touch #weapons{bottom:410px}
 .toggleRow{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--muted);pointer-events:auto}
 .toggleRow input[type=checkbox]{appearance:none;-webkit-appearance:none;width:38px;height:22px;border-radius:999px;background:rgba(236,239,230,.18);border:1px solid var(--line);position:relative;cursor:pointer;flex:none;margin:0;transition:background .15s}
 .toggleRow input[type=checkbox]::before{content:"";position:absolute;left:2px;top:2px;width:16px;height:16px;border-radius:50%;background:var(--text);transition:transform .15s}
@@ -540,7 +540,7 @@ const sky=(()=>{
   g.computeVertexNormals();
   const m=new THREE.Mesh(g,new THREE.MeshLambertMaterial({vertexColors:true}));
   m.receiveShadow=true; scene.add(m);
-  const water=new THREE.Mesh(new THREE.PlaneGeometry(5000,5000),new THREE.MeshPhongMaterial({color:0x2c7aa2,specular:0x88aacc,shininess:60,transparent:true,opacity:0.86}));
+  const water=new THREE.Mesh(new THREE.PlaneGeometry(5000,5000),new THREE.MeshPhongMaterial({color:0x2c7aa2,specular:0x88aacc,shininess:60,transparent:true,opacity:0.86,side:THREE.DoubleSide}));
   water.rotation.x=-Math.PI/2; scene.add(water);
 }
 
@@ -1933,7 +1933,15 @@ function resolve(a){
     else{const pl=a.pos.x-b.minX,pr=b.maxX-a.pos.x,pb=a.pos.z-b.minZ,pf=b.maxZ-a.pos.z,m=Math.min(pl,pr,pb,pf);
       if(m===pl)a.pos.x=b.minX-R;else if(m===pr)a.pos.x=b.maxX+R;else if(m===pb)a.pos.z=b.minZ-R;else a.pos.z=b.maxZ+R;}
   }
-  const r=Math.hypot(a.pos.x,a.pos.z);if(r>430){a.pos.x*=430/r;a.pos.z*=430/r;}
+  // keep everyone inside their own island: the BR map is a circle around the world origin, while
+  // the deathmatch arena lives far away at the DM_OX offset - without this branch every DM actor
+  // got yanked back onto the BR island's edge every frame, collapsing all 10 players into one spot
+  if(G.dm){
+    const dx=a.pos.x-DM_OX,dz=a.pos.z-DM_OZ,r=Math.hypot(dx,dz),lim=DM_HALF+10;
+    if(r>lim){a.pos.x=DM_OX+dx*lim/r;a.pos.z=DM_OZ+dz*lim/r;}
+  } else {
+    const r=Math.hypot(a.pos.x,a.pos.z);if(r>430){a.pos.x*=430/r;a.pos.z*=430/r;}
+  }
 }
 function moveActor(a,vx,vz,dt){
   // ease toward the target velocity instead of snapping to it, so reversing direction (e.g. A<->D)
@@ -2352,7 +2360,10 @@ function zoneNeed(b){
 function botThink(b){
   const B=b.brain;
   const armed=hasUsable(b);
-  const range=b.slots.some(w=>w&&w.key==='Kar98k')?170:110;
+  // deathmatch has infinite ammo and no reason to play stealthy - bots there scan wider and further
+  // than in BR so 5v5 fights actually happen instead of everyone missing each other in the village
+  let range=b.slots.some(w=>w&&w.key==='Kar98k')?170:110;
+  if(G.dm)range*=1.5;
   const cand=[];
   if(armed){
     const fx=-Math.sin(b.yaw),fz=-Math.cos(b.yaw);
@@ -2362,7 +2373,7 @@ function botThink(b){
       const dx=o.pos.x-b.pos.x,dz=o.pos.z-b.pos.z,d=Math.hypot(dx,dz);
       const alerted=B.alertFrom===o&&B.alertT>0;
       if(d>(alerted?230:range))continue;
-      if(!alerted&&d>20&&(dx*fx+dz*fz)/d<0.2)continue;
+      if(!alerted&&d>20&&(dx*fx+dz*fz)/d<(G.dm?-0.3:0.2))continue;
       cand.push([d,o]);
     }
     cand.sort((p,q)=>p[0]-q[0]);
@@ -2405,8 +2416,11 @@ function botThink(b){
 function dmBotWander(b){
   const B=b.brain;
   if(B.mode==='dm'&&B.path.length) return;
-  const side=b.team===0?1:-1,mid=DM_OX+side*rnd(20,150),z=DM_OZ+rnd(-140,140);
+  // push all the way across to the enemy's side (not just to the middle) so the two teams
+  // actually cross paths instead of drifting in a shared no-man's-land that nobody quite reaches
+  const side=b.team===0?1:-1,mid=DM_OX+side*rnd(90,190),z=DM_OZ+rnd(-140,140);
   setGoal(b,mid,z,'dm');
+  B.urgent=true;   // sprint speed while closing distance - this is a TDM, not a stealth crawl
 }
 function turnTo(b,yaw,rate){const d=angDiff(b.yaw,yaw);b.yaw+=clamp(d,-rate,rate);return Math.abs(d);}
 function prefDist(b){const w=b.weapon();if(!w)return 0;return{pistol:12,smg:14,ar:24,shotgun:6,dmr:38,sniper:55}[WEAPONS[w.key].kind];}

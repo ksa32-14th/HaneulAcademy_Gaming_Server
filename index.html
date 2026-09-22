@@ -178,6 +178,13 @@ button.go.small{padding:9px 18px;font-size:13px;letter-spacing:.08em}
 #tFire{width:84px;height:84px;font-size:14px;background:rgba(255,75,62,.26);border-color:rgba(255,75,62,.6)}
 #tFire:active{background:rgba(255,75,62,.5)}
 #tPause{position:absolute;top:220px;right:14px;width:40px;height:40px;font-size:15px}
+/* deathmatch: M opens the map on the left half and a weapon-swap panel on the right half */
+body.dmSplit #bigmap{left:27vw}
+#dmWeap{pointer-events:none;position:absolute;top:50%;right:5vw;transform:translateY(-50%);width:min(320px,38vw);padding:22px 24px;border-radius:22px;display:flex;flex-direction:column;gap:14px}
+#dmWeap .dmWeapGrp{display:flex;flex-direction:column;gap:6px}
+#dmWeap h3{margin:0;font-family:var(--disp);font-size:12px;letter-spacing:.14em;color:var(--muted);font-weight:600}
+#dmWeap .invList button{pointer-events:auto}
+#dmWeap .invList button.sel{background:rgba(242,179,61,.2);border-color:rgba(242,179,61,.75)}
 .tAux .tbtn{width:52px;height:52px;font-size:11px}
 /* the virtual joystick sits where #meds normally does, and the button cluster covers the usual
    weapon-slot corner - push both HUD elements clear of the touch controls */
@@ -257,6 +264,12 @@ body.touch #weapons{bottom:260px}
   </div>
 
   <canvas id="bigmap" hidden></canvas>
+  <div id="dmWeap" class="panel" hidden>
+    <div class="eyebrow">무기 변경</div>
+    <div class="dmWeapGrp"><h3>자동소총</h3><div id="dmWeapAR" class="invList"></div></div>
+    <div class="dmWeapGrp"><h3>저격 · DMR</h3><div id="dmWeapDMR" class="invList"></div></div>
+    <p class="note">M 키를 다시 누르면 닫힙니다</p>
+  </div>
 
   <div id="inv" hidden>
     <div class="invGrid">
@@ -297,6 +310,7 @@ body.touch #weapons{bottom:260px}
       <label class="toggleRow"><input type="checkbox" data-touch-toggle>터치 컨트롤 (모바일)</label>
       <div class="btnRow">
         <button id="startBtn" class="go" type="button">출격</button>
+        <button id="dmBtn" class="go alt" type="button">데스매치</button>
         <button id="mpOpenBtn" class="go alt" type="button">함께 플레이</button>
       </div>
     </div>
@@ -326,6 +340,7 @@ body.touch #weapons{bottom:260px}
       </div>
       <p class="note" id="mpCopyMsg">코드나 링크를 친구에게 보내면 바로 함께할 수 있습니다.</p>
       <div id="roomPlayers" class="roomPlayers"></div>
+      <label class="toggleRow" id="mpModeRow"><input type="checkbox" id="mpDM">데스매치 (5v5 고정, 배틀로얄 대신)</label>
       <label class="fld" id="totalRow">총 인원 (사람 + 봇)<input id="mpTotal" type="range" min="2" max="50" value="20"><span id="mpTotalOut" class="codeTag">20명</span></label>
       <p class="note" id="mpFillMsg"></p>
       <div class="btnRow">
@@ -410,6 +425,12 @@ const gB=(w,h,d)=>geo(`b${w}_${h}_${d}`,()=>new THREE.BoxGeometry(w,h,d));
 const gC=(r,l)=>geo(`c${r}_${l}`,()=>{const g=new THREE.CylinderGeometry(r,r,l,12);g.rotateX(Math.PI/2);return g;});
 function P(g,c,x,y,z,rx){const m=M(g,c,x,y,z);if(rx)m.rotation.x=rx;return m;}
 
+// ---------- deathmatch arena placement
+// The DM map is a second, independent map placed far from the battle royale island (same THREE.Scene,
+// same sky/sun, just a huge offset) rather than swapped in/out - far simpler than tearing down and
+// rebuilding the BR world's terrain, roads and InstancedMesh batches every time the mode changes.
+const DM_OX=6000,DM_OZ=0,DM_HALF=210,DM_GROUND=0;
+function inDM(x,z){return Math.abs(x-DM_OX)<DM_HALF&&Math.abs(z-DM_OZ)<DM_HALF;}
 // ---------- terrain
 const ISLAND_R=285;
 function coastR(a){return ISLAND_R+20*Math.sin(a*3+1.2)+11*Math.sin(a*7+0.3)+6*Math.sin(a*13+2);}
@@ -453,6 +474,7 @@ for(let i=0,tries=0;i<28&&tries<900;tries++){
 }
 TOWNS.forEach(t=>t.h=Math.max(1.6,rawHeight(t.x,t.z)));
 function heightAt(x,z){
+  if(inDM(x,z)) return DM_GROUND;   // deathmatch arena: flat ground, far from the battle royale island
   let h=rawHeight(x,z);
   for(const t of TOWNS){const dx=x-t.x,dz=z-t.z;const R=t.r+25;if(dx*dx+dz*dz<R*R){h=lerp(h,t.h,smooth(R,t.r,Math.sqrt(dx*dx+dz*dz)));}}
   return h;
@@ -993,6 +1015,81 @@ colorInst(new THREE.BoxGeometry(1,1,1),DRAW,it=>{const b=it.b;_p.set((b.minX+b.m
 }
 LOOT_SPOTS.forEach(s=>{if(s.y===null)s.y=heightAt(s.x,s.z);});
 
+// ---------- deathmatch arena: a dirt-and-mudbrick village boxed in by mountains, two team
+// bases facing each other across it. Built once at load (like the BR island), just parked at a
+// huge offset - see DM_OX/inDM above. Uses srand()/sr() exclusively (never Math.random()) so every
+// peer in a networked match generates the exact same layout.
+let DM_SPAWN=null,DM_BUNKERS=null;
+function buildDeathmatchMap(){
+  const savedWall=WALL_COLS.slice(),savedRoof=ROOF_COLS.slice(),savedLootLen=LOOT_SPOTS.length;
+  WALL_COLS.length=0;WALL_COLS.push(0xc9a876,0xb8916a,0xceb488,0xa8875f,0xbfa070,0xd4b98c);
+  ROOF_COLS.length=0;ROOF_COLS.push(0x8a6f4a,0x76583a,0x9c7f52,0x6e5638);
+
+  // flat dirt ground
+  {
+    const size=DM_HALF*2+60;
+    const g=new THREE.PlaneGeometry(size,size,50,50);g.rotateX(-Math.PI/2);
+    const pos=g.attributes.position,cols=new Float32Array(pos.count*3);
+    const base=new THREE.Color(0xb99a6e),dark=new THREE.Color(0x99794f),c=new THREE.Color();
+    for(let i=0;i<pos.count;i++){
+      const x=pos.getX(i),z=pos.getZ(i);
+      c.copy(base).lerp(dark,clamp(0.5+0.5*Math.sin(x*0.045)*Math.cos(z*0.05),0,1)*0.55);
+      cols[i*3]=c.r;cols[i*3+1]=c.g;cols[i*3+2]=c.b;
+    }
+    g.setAttribute('color',new THREE.BufferAttribute(cols,3));
+    const m=new THREE.Mesh(g,new THREE.MeshLambertMaterial({vertexColors:true}));
+    m.position.set(DM_OX,DM_GROUND,DM_OZ);m.receiveShadow=true;scene.add(m);
+  }
+
+  // mountain ring: overlapping square pillars fully enclosing the arena, tall enough that nobody
+  // ever climbs out (the arena has no blue zone - this boundary is the only thing containing play)
+  {
+    const R=DM_HALF+18,n=26,half=48;
+    for(let i=0;i<n;i++){
+      const a=i/n*Math.PI*2,nx=DM_OX+Math.cos(a)*R,nz=DM_OZ+Math.sin(a)*R,h=sr(95,150);
+      const c=[0x6f6a5c,0x625d50,0x79725f][Math.floor(srand()*3)];
+      addBox(nx-half,DM_GROUND-6,nz-half,nx+half,DM_GROUND+h,nz+half,c);
+    }
+  }
+
+  // village: mudbrick houses and compound walls scattered between the two bases
+  const BASE_DX=DM_HALF-25; // local x offset of each team's base from arena centre
+  for(const rz of [-130,-45,45,130]){
+    let x=-150;
+    while(x<150){
+      if(srand()<0.72){
+        const w=Math.round(sr(8,13)),d=Math.round(sr(7,10)),rot=Math.floor(srand()*4);
+        const yard=srand()<0.45?2.4:0;
+        building(srand()<0.75?'house':'shed',DM_OX+x+sr(-6,6),DM_OZ+rz+sr(-8,8),w,d,DM_GROUND,rot,yard);
+      }
+      x+=sr(24,34);
+    }
+  }
+  LOOT_SPOTS.length=savedLootLen;   // deathmatch has no loot - discard the spawn points building() just queued
+
+  // two sealed, windowless respawn bunkers (one per team) - there is no door, so nobody ever
+  // walks in; players only ever arrive here by being teleported in in dmRespawn()
+  function bunker(localX){
+    const bx=DM_OX+localX,bz=DM_OZ,bw=14,bd=10,bh=4.4,wt=0.45;
+    const x0=bx-bw/2,x1=bx+bw/2,z0=bz-bd/2,z1=bz+bd/2,y0=DM_GROUND,y1=DM_GROUND+bh,col=0x53584f;
+    addBox(x0,y0,z0,x1,y1,z0+wt,col);addBox(x0,y0,z1-wt,x1,y1,z1,col);
+    addBox(x0,y0,z0,x0+wt,y1,z1,col);addBox(x1-wt,y0,z0,x1,y1,z1,col);
+    addBox(x0-0.4,y0-0.3,z0-0.4,x1+0.4,y0,z1+0.4,0x46493f);
+    addBox(x0-0.5,y1,z0-0.5,x1+0.5,y1+0.45,z1+0.5,0x3f4239);
+    return {x:bx,z:bz};
+  }
+  DM_BUNKERS=[bunker(-BASE_DX),bunker(BASE_DX)];
+  const frontSpawns=(localX,face)=>{const pts=[];for(let i=0;i<8;i++)pts.push({x:DM_OX+localX+face*sr(18,30),z:DM_OZ+sr(-26,26)});return pts;};
+  DM_SPAWN=[
+    {team:0,base:DM_BUNKERS[0],front:frontSpawns(-BASE_DX,1)},
+    {team:1,base:DM_BUNKERS[1],front:frontSpawns(BASE_DX,-1)},
+  ];
+
+  WALL_COLS.length=0;WALL_COLS.push(...savedWall);
+  ROOF_COLS.length=0;ROOF_COLS.push(...savedRoof);
+}
+buildDeathmatchMap();
+
 // ---------- queries
 const Q1=[],Q2=[];
 function groundAt(x,z,y){
@@ -1066,6 +1163,9 @@ const WEAPONS={
   AKM:   {name:'AKM',   ammo:'7.62',dmg:34,rpm:600,auto:true, mag:30,spread:0.021,reload:2.4,range:300,zoom:1.5,pellets:1,recoil:0.034,hz:0.7,muz:0.88,rank:4,kind:'ar',dot:true},
   S686:  {name:'S686',  ammo:'12G', dmg:16,rpm:150,auto:false,mag:2, spread:0.075,reload:2.6,range:30, zoom:1.1,pellets:9,recoil:0.09, hz:0.5,muz:0.92,rank:3,kind:'shotgun'},
   Kar98k:{name:'Kar98k',ammo:'7.62',dmg:85,rpm:42, auto:false,mag:5, spread:0.035,reload:3.2,range:600,zoom:6,  pellets:1,recoil:0.11, hz:0.3,muz:1.08,rank:5,kind:'sniper',scope:true,bolt:true},
+  // DMR: semi-auto, faster follow-up shots than a bolt gun but less alpha damage than Kar98k -
+  // Deathmatch-exclusive (not in WEIGHTS, so it never turns up in battle royale loot)
+  MK14:  {name:'MK14',  ammo:'7.62',dmg:48,rpm:280,auto:false,mag:10,spread:0.024,reload:2.8,range:450,zoom:4,  pellets:1,recoil:0.055,hz:0.4,muz:0.98,rank:5,kind:'dmr',scope:true},
 };
 const WEIGHTS=[['UMP45',20],['M416',17],['AKM',19],['S686',15],['P92',15],['Kar98k',24]];
 const AMMO_COL={'9mm':0xe8c35a,'5.56':0x7fc65a,'7.62':0xe0873a,'12G':0xcc4b45};
@@ -1087,6 +1187,7 @@ function gunModel(key){
       break;
     }
     case'P92':add(P(gB(.035,.045,.19),Mt,0,.02,-.06),P(gB(.032,.1,.045),K,0,-.04,0,-.25));break;
+    case'MK14':add(P(gB(.062,.09,.62),W,0,-.01,-.1),P(gC(.013,.34),K,0,.015,-.68),P(gC(.022,.05),K,0,.085,-.34),P(gB(.042,.16,.075),K,0,-.12,-.1,.2),P(gB(.038,.1,.045),K,0,-.09,.06,-.3),P(gB(.05,.09,.26),W,0,-.02,.24),P(gC(.019,.12),K,0,.075,-.05));break;
   }
   if(WEAPONS[key].dot){ // 1.5x red-dot sight: rail mount + hood
     add(P(gB(.03,.02,.07),K,0,.055,-.09),P(geo('rdHood',()=>{const q=new THREE.CylinderGeometry(.024,.024,.06,14,1,true);q.rotateX(Math.PI/2);return q;}),K,0,.088,-.09));
@@ -1102,6 +1203,7 @@ const GRIPS={
   S686:{r:[0,-0.07,0.08],l:[0,-0.055,-0.3],m:[0,-0.02,-0.1]},
   Kar98k:{r:[0,-0.07,0.13],l:[0,-0.055,-0.3],m:[0.05,0.03,0]},
   P92:{r:[0,-0.06,0.005],l:[-0.02,-0.065,0.015],m:[0,-0.09,0]},
+  MK14:{r:[0,-0.09,0.08],l:[0,-0.05,-0.28],m:[0,-0.18,-0.12]},
 };
 const _ik={S:new V3(),n:new V3(),p:new V3(),u:new V3(),E:new V3(),f:new V3(),x:new V3(),y:new V3(),z:new V3(),m:new THREE.Matrix4(),T:new V3()};
 // analytic two-bone IK in the spine's space; pole hints where the elbow points
@@ -1249,7 +1351,7 @@ const BOTS=49; // + the player = 50
 const NAMES=['Viper','달빛사냥꾼','GhostK','Tiger_77','불곰','Ranger','NovaX','Frost','HawkEye','치킨러버','Ace','Blitz','Raven','LoneWolf','조용한저격수','Echo','Storm','사막여우','Titan','Phantom','Maverick','Bolt','Rex','밤까마귀','Sparrow','Kilo','산들바람'];
 const SHIRTS=[0x9b3b35,0x2f5d8a,0x6d7d3a,0x8a6b3d,0x444a52,0x7b4a8a,0x2d7a6e,0xb0752e,0x5a5a5a,0x873a5b,0xd8d2c2];
 let actors=[], player=null, plane=null;
-const G={state:'menu',paused:false,time:0,ads:false,scoped:false,fp:true,scopeToggle:false,lookX:0,lookY:0,noLock:false,locked:false,everLocked:false,dmgDealt:0,bigmap:false,deathCause:'',hurt:0,
+const G={state:'menu',paused:false,time:0,ads:false,scoped:false,fp:true,scopeToggle:false,lookX:0,lookY:0,noLock:false,locked:false,everLocked:false,dmgDealt:0,bigmap:false,deathCause:'',hurt:0,dm:false,
   net:{mode:'off'}}; // net.mode: 'off' (solo) | 'host' | 'client' — see the networking module near the end of the file
 const pick=a=>a[Math.floor(Math.random()*a.length)];
 // per-stance heights (m above feet / body centre when prone)
@@ -1270,6 +1372,7 @@ class Actor{
     // networking: `id` identifies this actor across machines ('host', a PeerJS peer id, or 'bot0'..);
     // `remote` marks a puppet driven by incoming network data instead of local input/AI (see stepPuppet)
     this.id=null;this.remote=false;this.net={x:0,y:0,z:0,yaw:0,pitch:0,got:false};
+    this.team=null;this.respawnT=0;   // deathmatch only: 0/1 team id, seconds left until respawn while dead
     this.mesh=makeChar(shirt,pick(PANTS),pick(SKINS),pick(HAIRS));
   }
   weapon(){return this.slots[this.cur];}
@@ -1620,7 +1723,90 @@ function damage(v,amount,attacker,head,wname){
   if(v.isPlayer){G.hurt=Math.min(1,G.hurt+amount/40);if(attacker)G.ghostHold=0.45;}
   if(v.hp<=0) kill(v,attacker,wname,head);
 }
+// ---------- deathmatch: fixed AR+DMR loadout, infinite ammo, lvl2 armor, team-kill scoring,
+// timed respawns at a sealed per-team bunker. No loot exists in this mode at all.
+const DM_AR=['M416','AKM'],DM_DMR=['Kar98k','MK14'],DM_TEAM_COL=[0x2f5fa8,0xa8342f];
+const DM={score:[0,0],timer:0,target:30,limit:600,respawnWait:6,feedQ:[]};
+function dmEquip(a){
+  const ld=a.dmLoadout||(a.dmLoadout={ar:DM_AR[0],dmr:DM_DMR[0]});
+  a.slots=[{key:ld.ar,mag:WEAPONS[ld.ar].mag},{key:ld.dmr,mag:WEAPONS[ld.dmr].mag},null];
+  a.ammo['5.56']=Infinity;a.ammo['7.62']=Infinity;
+  a.vest=2;a.helmet=2;a.bandage=0;a.medkit=0;a.cur=0;
+}
+function dmSetLoadout(a,ar,dmr){
+  const cur=a.dmLoadout||{ar:DM_AR[0],dmr:DM_DMR[0]};
+  a.dmLoadout={ar:ar||cur.ar,dmr:dmr||cur.dmr};
+  dmEquip(a);
+}
+// M-key weapon-swap panel (deathmatch only): pick one AR and one DMR/sniper, applied instantly
+function renderDMWeap(){
+  if(!player||!player.dmLoadout)return;
+  const mk=(key,cur)=>`<button type="button" data-k="${key}" class="${key===cur?'sel':''}">${esc(WEAPONS[key].name)}</button>`;
+  $('dmWeapAR').innerHTML=DM_AR.map(k=>mk(k,player.dmLoadout.ar)).join('');
+  $('dmWeapDMR').innerHTML=DM_DMR.map(k=>mk(k,player.dmLoadout.dmr)).join('');
+  $('dmWeapAR').querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{dmSetLoadout(player,b.dataset.k,null);if(G.net.mode==='client')clientSendInput();renderDMWeap();}));
+  $('dmWeapDMR').querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{dmSetLoadout(player,null,b.dataset.k);if(G.net.mode==='client')clientSendInput();renderDMWeap();}));
+}
+function dmSpawnPos(team){ return pick(DM_SPAWN[team].front); }
+function dmPlaceAtSpawn(a){
+  const p=dmSpawnPos(a.team);
+  a.pos.set(p.x,DM_GROUND+0.1,p.z);a.yaw=a.team===0?Math.PI/2:-Math.PI/2;a.pitch=0;
+  a.state='ground';a.onGround=true;a.vy=0;a.stance='stand';a.alive=true;a.hp=100;a.deadT=0;
+  dmEquip(a);
+  if(!a.isPlayer&&a.brain){a.brain.target=null;a.brain.path=[];a.brain.mode='none';}
+}
+function dmRespawn(a){ dmPlaceAtSpawn(a); }
+function dmKill(v,k,wname,head){
+  v.alive=false;v.hp=0;v.healT=0;v.reloadT=0;v.deadT=0;v.respawnT=DM.respawnWait;
+  const u=v.mesh.userData;u.chute.visible=false;u.flash.visible=false;
+  if(k&&k.team!==v.team){
+    k.kills++;DM.score[k.team]=(DM.score[k.team]||0)+1;
+    if(!k.isPlayer&&k.brain&&k.brain.target===v)k.brain.target=null;
+  }
+  feed(k,v,wname,head);
+  DM.feedQ.push({kid:k?k.id:null,vid:v.id,w:wname,head:!!head});
+  if(k&&k.isPlayer){bigMsg(`${v.name} 처치`,'amber',1.8);blip(1200,0.09,0.05,'triangle');}
+  else if(v.isPlayer) bigMsg('사망 · 곧 리스폰',null,1.6);
+  if(G.net.mode==='host') dmCheckWin();
+}
+function dmCheckWin(){
+  if(DM.score[0]>=DM.target||DM.score[1]>=DM.target||DM.timer>=DM.limit) dmEndMatch();
+}
+function dmTick(dt){
+  DM.timer+=dt;
+  for(const a of actors){
+    if(a.alive||a.state==='plane'||a.team===null)continue;
+    a.respawnT-=dt;
+    if(a.respawnT<=0){
+      dmRespawn(a);
+      if(a.human){const p=G.net.players.get(a.id);if(p&&p.conn)sendTo(p.conn,{type:'respawn',x:a.pos.x,y:a.pos.y,z:a.pos.z,yaw:a.yaw,ar:a.dmLoadout.ar,dmr:a.dmLoadout.dmr});}
+    }
+  }
+  dmCheckWin();
+}
+function dmShowResult(iwon){
+  closeInv(false);
+  G.state='over';G.scoped=false;G.ads=false;G.aimScope=false;G.scopeToggle=false;
+  stopHum();
+  setTimeout(()=>{
+    if(document.pointerLockElement)document.exitPointerLock();
+    $('ovRank').textContent=iwon?'승리':'패배';
+    const t=$('ovTitle');t.textContent=iwon?'승리! 오늘 저녁은 치킨이다!':'패배';t.className=iwon?'win':'';
+    $('ovCause').hidden=true;
+    $('ovKills').textContent=player.kills;$('ovDmg').textContent=Math.round(G.dmgDealt);$('ovTime').textContent=fmtT(G.time);
+    $('over').hidden=false;$('bigmap').hidden=true;$('dmWeap').hidden=true;
+    $('againBtn').textContent=G.net.mode!=='off'?'메뉴로':'다시 출격';
+    if(iwon){blip(660,0.3,0.06,'triangle');setTimeout(()=>blip(990,0.4,0.06,'triangle'),180);}
+  },600);
+}
+function dmEndMatch(){
+  if(G.state!=='play')return;
+  const winTeam=DM.score[0]>=DM.score[1]?0:1;
+  if(G.net.mode==='host') broadcastAll({type:'dmEnd',winTeam});
+  dmShowResult(player.team===winTeam);
+}
 function kill(v,k,wname,head){
+  if(G.dm){ dmKill(v,k,wname,head); return; }
   v.alive=false;v.hp=0;v.healT=0;v.reloadT=0;v.deadT=0;
   const u=v.mesh.userData;u.chute.visible=false;u.flash.visible=false;
   for(let s=0;s<3;s++){const w=v.slots[s];if(w){v.ammo[WEAPONS[w.key].ammo]+=w.mag;dropItem(v,{type:'weapon',key:w.key});}}
@@ -1945,7 +2131,10 @@ function updatePlayer(dt){
   const turn=G.scoped?0.5:1.8;
   if(keys.ArrowLeft)p.yaw+=turn*dt; if(keys.ArrowRight)p.yaw-=turn*dt;
   if(keys.ArrowUp)p.pitch=clamp(p.pitch+turn*0.7*dt,-1.35,1.25); if(keys.ArrowDown)p.pitch=clamp(p.pitch-turn*0.7*dt,-1.35,1.25);
-  if(pressed.has('KeyM')){G.bigmap=!G.bigmap;$('bigmap').hidden=!G.bigmap;}
+  if(pressed.has('KeyM')){
+    G.bigmap=!G.bigmap;$('bigmap').hidden=!G.bigmap;
+    if(G.dm){ document.body.classList.toggle('dmSplit',G.bigmap); $('dmWeap').hidden=!G.bigmap; if(G.bigmap) renderDMWeap(); }
+  }
   if(pressed.has('KeyV'))G.fp=!G.fp;
   p.bloom=Math.max(0,p.bloom-dt*0.05);
   if(p.state==='plane'){ p.pos.copy(plane.pos); if(pressed.has('KeyF')) jumpOut(p); return; }
@@ -2078,8 +2267,8 @@ function playerAimDir(){
 }
 
 // ---------- bots
-function makeBot(i){
-  const b=new Actor(false,NAMES[i%NAMES.length],SHIRTS[i%SHIRTS.length]);
+function makeBot(i,shirt){
+  const b=new Actor(false,NAMES[i%NAMES.length],shirt||SHIRTS[i%SHIRTS.length]);
   b.skill=rnd(0.35,0.95);b.aggr=rnd(0.3,1);
   b.brain={mode:'none',path:[],target:null,react:0,burst:4,burstPause:0,strafe:1,strafeT:0,warm:2,thinkT:rnd(0,0.3),
     alertFrom:null,alertT:0,lastSeen:null,lostT:0,stuckAcc:0,stuckPos:{x:0,z:0},stuckN:0,detourT:0,dx:0,dz:0,lootItem:null,ignore:new Set(),urgent:false,jumpAt:0,land:null,lazy:rnd(0,25)};
@@ -2110,7 +2299,7 @@ function hasUsable(b){for(const w of b.slots)if(w&&(w.mag>0||b.ammo[WEAPONS[w.ke
 function chooseWeapon(b,dist){
   let best=-1,score=-1;
   for(let s=0;s<3;s++){const w=b.slots[s];if(!w)continue;const d=WEAPONS[w.key];if(w.mag<=0&&b.ammo[d.ammo]<=0)continue;
-    let sc=d.rank; if(d.kind==='shotgun')sc+=dist<12?4:dist>30?-3:0; if(d.kind==='sniper')sc+=dist>45?3:dist<15?-2:0;
+    let sc=d.rank; if(d.kind==='shotgun')sc+=dist<12?4:dist>30?-3:0; if(d.kind==='sniper')sc+=dist>45?3:dist<15?-2:0; if(d.kind==='dmr')sc+=dist>25?2:dist<10?-2:0;
     if(sc>score){score=sc;best=s;}}
   if(best>=0&&best!==b.cur) switchTo(b,best);
 }
@@ -2160,6 +2349,7 @@ function botThink(b){
     const fx=-Math.sin(b.yaw),fz=-Math.cos(b.yaw);
     for(const o of actors){
       if(o===b||!o.alive||(o.state!=='ground'&&o.state!=='chute'))continue;
+      if(G.dm&&o.team===b.team)continue;   // deathmatch: never target your own team
       const dx=o.pos.x-b.pos.x,dz=o.pos.z-b.pos.z,d=Math.hypot(dx,dz);
       const alerted=B.alertFrom===o&&B.alertT>0;
       if(d>(alerted?230:range))continue;
@@ -2186,6 +2376,7 @@ function botThink(b){
     if(b.hp<50&&b.medkit>0)startHeal(b,'medkit');else if(b.bandage>0)startHeal(b,'bandage');
   }
   if(b.healT>0) return;
+  if(G.dm){ dmBotWander(b); return; }
   const zn=zoneNeed(b);
   if(zn){ if(B.mode!=='zone'||!B.path.length)setGoal(b,zn.x,zn.z,'zone'); B.urgent=zn.urgent; return; }
   B.urgent=false;
@@ -2200,8 +2391,16 @@ function botThink(b){
     else{const a=Math.random()*6.283,d=Math.sqrt(Math.random())*Math.max(2,tr*0.7);setGoal(b,tx+Math.cos(a)*d,tz+Math.sin(a)*d,'roam');}
   }
 }
+// deathmatch bots without a target: push toward the middle of the village (no loot, no zone to
+// chase) so they keep running into the enemy team instead of idling at their own base
+function dmBotWander(b){
+  const B=b.brain;
+  if(B.mode==='dm'&&B.path.length) return;
+  const side=b.team===0?1:-1,mid=DM_OX+side*rnd(20,150),z=DM_OZ+rnd(-140,140);
+  setGoal(b,mid,z,'dm');
+}
 function turnTo(b,yaw,rate){const d=angDiff(b.yaw,yaw);b.yaw+=clamp(d,-rate,rate);return Math.abs(d);}
-function prefDist(b){const w=b.weapon();if(!w)return 0;return{pistol:12,smg:14,ar:24,shotgun:6,sniper:55}[WEAPONS[w.key].kind];}
+function prefDist(b){const w=b.weapon();if(!w)return 0;return{pistol:12,smg:14,ar:24,shotgun:6,dmr:38,sniper:55}[WEAPONS[w.key].kind];}
 function updateBot(b,dt){
   const B=b.brain;
   if(b.state==='plane'){b.pos.copy(plane.pos);return;}
@@ -2467,12 +2666,16 @@ function updateHUD(dt){
   dmgDirT-=dt;$('dmgDir').style.opacity=Math.max(0,Math.min(1,dmgDirT));
   G.hurt=Math.max(0,G.hurt-dt*0.8);
   hud.vig.style.opacity=Math.min(1,G.hurt+(p.alive&&p.hp<30?0.35+0.15*Math.sin(G.time*5):0));
-  const outside=p.alive&&p.state!=='plane'&&Math.hypot(p.pos.x-Z.cx,p.pos.z-Z.cz)>Z.r;
+  const outside=!G.dm&&p.alive&&p.state!=='plane'&&Math.hypot(p.pos.x-Z.cx,p.pos.z-Z.cz)>Z.r;
   hud.blue.style.opacity=outside?1:0;
   setText(hud.alive,'alive',String(actors.filter(a=>a.alive).length));
   setText(hud.kill,'kill',String(p.kills));
-  let zt=Z.mode==='wait'?`블루존 ${fmtT(Z.timer)}`:Z.mode==='shrink'?`축소 중 ${fmtT(Z.timer)}`:'최종';
-  if(outside) zt=`안전지대 ${Math.ceil(Math.hypot(p.pos.x-Z.cx,p.pos.z-Z.cz)-Z.r)}m`;
+  let zt;
+  if(G.dm) zt=p.alive?`${DM.score[0]} : ${DM.score[1]}`:`리스폰 ${Math.max(0,Math.ceil(p.respawnT))}초`;
+  else{
+    zt=Z.mode==='wait'?`블루존 ${fmtT(Z.timer)}`:Z.mode==='shrink'?`축소 중 ${fmtT(Z.timer)}`:'최종';
+    if(outside) zt=`안전지대 ${Math.ceil(Math.hypot(p.pos.x-Z.cx,p.pos.z-Z.cz)-Z.r)}m`;
+  }
   setText(hud.zone,'zone',zt);hud.zone.classList.toggle('warn',outside);
   const hp=Math.max(0,p.hp);
   // bar glides to the real value; the red trail waits a moment, then drains down to it
@@ -2799,7 +3002,7 @@ function newGame(netCfg){
     for(let i=0;i<BOTS;i++){const b=makeBot(i+offs);if(i+offs>=NAMES.length)b.name+='_'+(Math.floor((i+offs)/NAMES.length)+1);b.id='bot'+i;actors.push(b);planBotDrop(b);}
   }
   player.yaw=planeMesh.rotation.y;player.pitch=-0.25;
-  Object.assign(G,{state:'play',paused:false,time:0,ads:false,scoped:false,aimScope:false,scopeToggle:false,recoilAcc:0,camKick:0,dmgDealt:0,hurt:0,bigmap:false,nearLoot:null,nearItems:[],nearSel:0,invOpen:false,lookX:0,lookY:0,hpShown:100,hpGhost:100,ghostHold:0});
+  Object.assign(G,{state:'play',paused:false,time:0,ads:false,scoped:false,aimScope:false,scopeToggle:false,recoilAcc:0,camKick:0,dmgDealt:0,hurt:0,bigmap:false,nearLoot:null,nearItems:[],nearSel:0,invOpen:false,lookX:0,lookY:0,hpShown:100,hpGhost:100,ghostHold:0,dm:false});
   $('inv').hidden=true;
   $('bigmap').hidden=true;
   for(const k in cache)delete cache[k];
@@ -2807,10 +3010,37 @@ function newGame(netCfg){
   startHum();
   setAliveLabel();
 }
+// deathmatch: 2 teams of 5 (player + humans first, bots fill the rest), fixed AR+DMR loadout,
+// no loot to spawn. netCfg shape matches newGame()'s - 'total' is ignored, DM is always 5v5.
+function newGameDM(netCfg){
+  clearGame();
+  G.dm=true;DM.score=[0,0];DM.timer=0;DM.feedQ=[];DM.target=30;DM.limit=600;DM.respawnWait=6;
+  const humans=netCfg?[{id:netCfg.myId,name:netCfg.myName,isMe:true},...netCfg.humans.map(h=>({id:h.id,name:h.name}))]:[{id:'solo',name:'나',isMe:true}];
+  humans.forEach((h,i)=>h.team=i%2);
+  for(const h of humans){
+    const a=new Actor(!!h.isMe,h.name,DM_TEAM_COL[h.team]);
+    a.id=h.id;a.team=h.team;a.shirtColor=DM_TEAM_COL[h.team];
+    if(h.isMe) player=a; else { a.remote=true; a.human=true; }
+    actors.push(a);
+  }
+  let bi=0;
+  for(let team=0;team<2;team++){
+    while(actors.filter(a=>a.team===team).length<5){
+      const b=makeBot(bi,DM_TEAM_COL[team]);b.id='bot'+(bi++);b.team=team;b.shirtColor=DM_TEAM_COL[team];actors.push(b);
+    }
+  }
+  for(const a of actors) dmPlaceAtSpawn(a);
+  Object.assign(G,{state:'play',paused:false,time:0,ads:false,scoped:false,aimScope:false,scopeToggle:false,recoilAcc:0,camKick:0,dmgDealt:0,hurt:0,bigmap:false,nearLoot:null,nearItems:[],nearSel:0,invOpen:false,lookX:0,lookY:0,hpShown:100,hpGhost:100,ghostHold:0,dm:true});
+  $('inv').hidden=true;$('bigmap').hidden=true;$('dmWeap').hidden=true;
+  for(const k in cache)delete cache[k];
+  $('hud').hidden=false;$('menu').hidden=true;$('over').hidden=true;$('pause').hidden=true;$('lobbyHome').hidden=true;$('lobbyRoom').hidden=true;
+  startHum();
+  setAliveLabel();
+}
 // updates the top-left SOLO/멀티 badge and the over-screen's "/50" to match the actual match size
 function setAliveLabel(){
-  const n=G.net.mode==='off'?BOTS+1:(actors.length||50);
-  $('lobbyTag').textContent=(G.net.mode==='off'?'SOLO · ':'MULTI · ')+n;
+  const n=G.dm?10:(G.net.mode==='off'?BOTS+1:(actors.length||50));
+  $('lobbyTag').textContent=G.dm?'DM · 5v5':(G.net.mode==='off'?'SOLO · ':'MULTI · ')+n;
   $('ovTotal').textContent=n;
 }
 // client side of a networked match start: build the world from the host's manifest instead of
@@ -2830,8 +3060,30 @@ function netJoinMatch(msg){
   }
   if(!player){netRoomMsg('호스트가 명단에서 나를 빼먹었습니다. 다시 시도해 주세요.');return;}
   player.yaw=planeMesh.rotation.y;player.pitch=-0.25;
-  Object.assign(G,{state:'play',paused:false,time:0,ads:false,scoped:false,aimScope:false,scopeToggle:false,recoilAcc:0,camKick:0,dmgDealt:0,hurt:0,bigmap:false,nearLoot:null,nearItems:[],nearSel:0,invOpen:false,lookX:0,lookY:0,hpShown:100,hpGhost:100,ghostHold:0});
+  Object.assign(G,{state:'play',paused:false,time:0,ads:false,scoped:false,aimScope:false,scopeToggle:false,recoilAcc:0,camKick:0,dmgDealt:0,hurt:0,bigmap:false,nearLoot:null,nearItems:[],nearSel:0,invOpen:false,lookX:0,lookY:0,hpShown:100,hpGhost:100,ghostHold:0,dm:false});
   $('inv').hidden=true;$('bigmap').hidden=true;
+  for(const k in cache)delete cache[k];
+  $('hud').hidden=false;$('menu').hidden=true;$('over').hidden=true;$('pause').hidden=true;$('lobbyHome').hidden=true;$('lobbyRoom').hidden=true;
+  startHum();setAliveLabel();
+  initAudio();if(AC&&AC.state==='suspended')AC.resume();
+  if(!G.noLock)requestLock();
+}
+// client side of a networked deathmatch start - the map/spawns are deterministic (same seed as
+// every other peer) so only the roster (who's on which team) needs to come from the host
+function netJoinMatchDM(msg){
+  clearGame();
+  G.dm=true;DM.score=[0,0];DM.timer=0;DM.feedQ=[];DM.target=30;DM.limit=600;DM.respawnWait=6;
+  player=null;
+  for(const r of msg.roster){
+    const a=new Actor(r.id===G.net.myId,r.name,DM_TEAM_COL[r.team]);
+    a.id=r.id;a.team=r.team;a.shirtColor=DM_TEAM_COL[r.team];
+    if(r.id===G.net.myId) player=a; else { a.remote=true; if(!r.isBot)a.human=true; }
+    actors.push(a);
+  }
+  if(!player){netRoomMsg('호스트가 명단에서 나를 빼먹었습니다. 다시 시도해 주세요.');return;}
+  dmPlaceAtSpawn(player);
+  Object.assign(G,{state:'play',paused:false,time:0,ads:false,scoped:false,aimScope:false,scopeToggle:false,recoilAcc:0,camKick:0,dmgDealt:0,hurt:0,bigmap:false,nearLoot:null,nearItems:[],nearSel:0,invOpen:false,lookX:0,lookY:0,hpShown:100,hpGhost:100,ghostHold:0,dm:true});
+  $('inv').hidden=true;$('bigmap').hidden=true;$('dmWeap').hidden=true;
   for(const k in cache)delete cache[k];
   $('hud').hidden=false;$('menu').hidden=true;$('over').hidden=true;$('pause').hidden=true;$('lobbyHome').hidden=true;$('lobbyRoom').hidden=true;
   startHum();setAliveLabel();
@@ -2860,11 +3112,17 @@ function endGame(win,rank){
 // main menu (this v1 doesn't support re-lobbying the same room for another round)
 function restartOrMenu(){
   if(G.net.mode!=='off'){netLeaveRoom();$('over').hidden=true;$('menu').hidden=false;}
+  else if(G.dm) startDM();
   else start();
 }
 function start(){
   initAudio();if(AC&&AC.state==='suspended')AC.resume();
   newGame();
+  if(!G.noLock)requestLock();
+}
+function startDM(){
+  initAudio();if(AC&&AC.state==='suspended')AC.resume();
+  newGameDM();
   if(!G.noLock)requestLock();
 }
 // sensitivity: shared by the menu and pause sliders; remembered per browser
@@ -2880,6 +3138,7 @@ document.querySelectorAll('[data-sens]').forEach(el=>el.addEventListener('input'
 }));
 syncSens();
 $('startBtn').addEventListener('click',start);
+$('dmBtn').addEventListener('click',startDM);
 $('againBtn').addEventListener('click',restartOrMenu);
 $('resumeBtn').addEventListener('click',()=>{
   // desktop resumes via the pointerlockchange event once the lock re-engages; touch has no pointer
@@ -3000,7 +3259,7 @@ async function createRoom(){
     $('roomCode').textContent=code;
     $('lobbyHome').hidden=true;$('lobbyRoom').hidden=false;
     $('mpReadyBtn').hidden=true;$('mpStartBtn').hidden=false;$('totalRow').hidden=false;
-    $('mpTotal').value=20;$('mpTotalOut').textContent='20명';
+    $('mpTotal').value=20;$('mpTotalOut').textContent='20명';$('mpDM').checked=false;
     if(location.protocol==='file:'){
       // each friend runs their own local copy of this file, so a file:// link only works on
       // this machine — only the room code (not the link) is actually shareable in that case
@@ -3114,6 +3373,13 @@ $('mpTotal').addEventListener('input',()=>{
   G.net.total=+$('mpTotal').value;$('mpTotalOut').textContent=G.net.total+'명';
   broadcastRoster();
 });
+$('mpDM').addEventListener('change',()=>{
+  if(G.net.mode!=='host')return;
+  G.net.dm=$('mpDM').checked;
+  $('totalRow').hidden=G.net.dm;
+  G.net.total=G.net.dm?10:+$('mpTotal').value;
+  broadcastRoster();
+});
 $('mpReadyBtn').addEventListener('click',()=>{
   if(G.net.mode!=='client')return;
   G.net.ready=!G.net.ready;$('mpReadyBtn').textContent=G.net.ready?'준비 취소':'준비 완료';
@@ -3174,7 +3440,8 @@ function onClientMessage(msg){
   if(msg.type==='roster'){
     G.net.players=new Map(msg.players.map(p=>[p.id,p]));G.net.total=msg.total;renderLobby();
   } else if(msg.type==='start'){
-    G.net.started=true;netJoinMatch(msg);
+    G.net.started=true;
+    if(msg.dm) netJoinMatchDM(msg); else netJoinMatch(msg);
   } else if(msg.type==='state'){
     clientApplyState(msg);
   } else if(msg.type==='death'){
@@ -3184,6 +3451,15 @@ function onClientMessage(msg){
   } else if(msg.type==='win'){
     if(G.net.endedLocally)return;G.net.endedLocally=true;
     endGame(true,1);
+  } else if(msg.type==='respawn'){
+    if(!player)return;
+    player.pos.set(msg.x,msg.y,msg.z);player.yaw=msg.yaw;player.pitch=0;
+    player.alive=true;player.hp=100;player.state='ground';player.onGround=true;player.vy=0;player.deadT=0;
+    player.dmLoadout={ar:msg.ar,dmr:msg.dmr};dmEquip(player);
+    bigMsg('리스폰','amber',1);
+  } else if(msg.type==='dmEnd'){
+    if(G.net.endedLocally)return;G.net.endedLocally=true;
+    dmShowResult(player.team===msg.winTeam);
   } else if(msg.type==='hostLeft'){
     if(G.state==='play'&&!G.net.endedLocally){netRoomMsg('호스트가 나가서 경기가 종료되었습니다.');}
   }
@@ -3191,15 +3467,22 @@ function onClientMessage(msg){
 // ---------- host: match start & runtime broadcasting ----------
 function hostStartMatch(){
   const humans=[...G.net.players.values()].filter(p=>p.id!=='host').map(p=>({id:p.id,name:p.name}));
-  const total=G.net.total;
-  if(humans.length+1>total){netRoomMsg('총 인원이 접속한 사람 수보다 적습니다.');return;}
+  const dm=!!G.net.dm,total=dm?10:G.net.total;
+  if(!dm&&humans.length+1>total){netRoomMsg('총 인원이 접속한 사람 수보다 적습니다.');return;}
+  if(dm&&humans.length+1>10){netRoomMsg('데스매치는 최대 10명(5vs5)까지입니다.');return;}
   G.net.started=true;
   G.net.suppressLootDiff=true;
-  newGame({myId:'host',myName:G.net.myName,humans,total});
+  if(dm) newGameDM({myId:'host',myName:G.net.myName,humans});
+  else newGame({myId:'host',myName:G.net.myName,humans,total});
   G.net.suppressLootDiff=false;G.net.diffTake=[];G.net.diffDrop=[];
-  const roster=actors.map(a=>({id:a.id,name:a.name,isBot:!a.human&&!a.isPlayer,shirt:a.shirtColor}));
-  const lootMsg=loot.map(it=>({id:it.id,type:it.type,key:it.key,ammo:it.ammo,count:it.count,level:it.level,x:it.x,y:it.y,z:it.z}));
-  broadcastAll({type:'start',roster,loot:lootMsg,plane:G.net.planeParams});
+  if(dm){
+    const roster=actors.map(a=>({id:a.id,name:a.name,team:a.team,isBot:!a.human&&!a.isPlayer}));
+    broadcastAll({type:'start',dm:true,roster});
+  } else {
+    const roster=actors.map(a=>({id:a.id,name:a.name,isBot:!a.human&&!a.isPlayer,shirt:a.shirtColor}));
+    const lootMsg=loot.map(it=>({id:it.id,type:it.type,key:it.key,ammo:it.ammo,count:it.count,level:it.level,x:it.x,y:it.y,z:it.z}));
+    broadcastAll({type:'start',roster,loot:lootMsg,plane:G.net.planeParams});
+  }
   initAudio();if(AC&&AC.state==='suspended')AC.resume();
   if(!G.noLock)requestLock();
 }
@@ -3233,6 +3516,7 @@ function hostBroadcastState(){
   const msg={type:'state',z:{cx:Z.cx,cz:Z.cz,r:Z.r,mode:Z.mode,timer:Z.timer,phase:Z.phase,tx:Z.tx,tz:Z.tz,tr:Z.tr},a};
   if(G.net.diffTake&&G.net.diffTake.length){msg.take=G.net.diffTake;G.net.diffTake=[];}
   if(G.net.diffDrop&&G.net.diffDrop.length){msg.drop=G.net.diffDrop;G.net.diffDrop=[];}
+  if(G.dm){ msg.dm={score:DM.score,timer:DM.timer}; if(DM.feedQ.length){msg.dmFeed=DM.feedQ;DM.feedQ=[];} }
   broadcastAll(msg);
 }
 function clientApplyState(msg){
@@ -3248,6 +3532,8 @@ function clientApplyState(msg){
   }
   if(msg.take) for(const id of msg.take){const it=loot.find(l=>l.id===id);if(it){scene.remove(it.mesh);loot.splice(loot.indexOf(it),1);}}
   if(msg.drop) for(const d of msg.drop){if(!loot.find(l=>l.id===d.id))spawnLoot({id:d.id,type:d.type,key:d.key,ammo:d.ammo,count:d.count,level:d.level},d.x,d.y,d.z);}
+  if(msg.dm){ DM.score=msg.dm.score;DM.timer=msg.dm.timer; }
+  if(msg.dmFeed) for(const f of msg.dmFeed){const k=f.kid?actors.find(a=>a.id===f.kid):null,v=actors.find(a=>a.id===f.vid);if(v)feed(k,v,f.w,f.head);}
 }
 function clientSendInput(){
   if(!player)return;
@@ -3277,8 +3563,10 @@ function frame(now){
     G.time+=G.state==='play'?dt:0;
     updatePlane(dt);
     // zone simulation is host-authoritative in a networked match: a client mirrors Z verbatim
-    // from the host's broadcasts instead of running its own copy (see the networking module)
-    if(G.net.mode!=='client') updateZone(dt);
+    // from the host's broadcasts instead of running its own copy (see the networking module).
+    // Deathmatch has no blue zone at all - the mountain ring is the only boundary.
+    if(G.net.mode!=='client'&&!G.dm) updateZone(dt);
+    if(G.dm&&G.net.mode!=='client') dmTick(dt);
     if(G.state==='play'){applyLook(dt);updatePlayer(dt);}
     for(const a of actors){if(!a.isPlayer&&a.alive&&a.brain)updateBot(a,dt);}   // a.brain guard: remote puppets have none
     for(const a of actors){if(a.remote)stepPuppet(a,dt);}

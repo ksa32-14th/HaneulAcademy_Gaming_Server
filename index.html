@@ -172,12 +172,13 @@ button.go.small{padding:9px 18px;font-size:13px;letter-spacing:.08em}
 #tStick{position:absolute;left:20px;bottom:20px;width:132px;height:132px;border-radius:50%;background:rgba(236,239,230,.08);border:1px solid var(--line);pointer-events:auto;touch-action:none}
 #tStickNub{position:absolute;left:50%;top:50%;width:56px;height:56px;margin:-28px 0 0 -28px;border-radius:50%;background:rgba(242,179,61,.5);border:1px solid rgba(242,179,61,.8);transition:transform .05s linear}
 #tButtons{position:absolute;right:16px;bottom:16px;display:flex;flex-direction:column;align-items:flex-end;gap:12px;pointer-events:none}
-#tAux{display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end;max-width:220px}
+.tAux{display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end;max-width:220px}
 .tbtn{pointer-events:auto;touch-action:none;-webkit-user-select:none;user-select:none;font-family:var(--disp);font-weight:700;font-size:11.5px;letter-spacing:.02em;width:56px;height:56px;border-radius:50%;background:rgba(10,15,19,.55);border:1px solid var(--line);color:var(--text);display:flex;align-items:center;justify-content:center;text-align:center;line-height:1.1;-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px)}
 .tbtn:active{background:rgba(242,179,61,.35);border-color:rgba(242,179,61,.7)}
 #tFire{width:84px;height:84px;font-size:14px;background:rgba(255,75,62,.26);border-color:rgba(255,75,62,.6)}
 #tFire:active{background:rgba(255,75,62,.5)}
 #tPause{position:absolute;top:220px;right:14px;width:40px;height:40px;font-size:15px}
+.tAux .tbtn{width:52px;height:52px;font-size:11px}
 /* the virtual joystick sits where #meds normally does, and the button cluster covers the usual
    weapon-slot corner - push both HUD elements clear of the touch controls */
 body.touch #meds{bottom:160px}
@@ -237,7 +238,13 @@ body.touch #weapons{bottom:260px}
       <button id="tPause" class="tbtn" type="button">⏸</button>
       <div id="tStick"><div id="tStickNub"></div></div>
       <div id="tButtons">
-        <div id="tAux">
+        <div class="tAux">
+          <button id="tJump" class="tbtn" type="button">점프</button>
+          <button id="tSprint" class="tbtn" type="button">달리기</button>
+          <button id="tCrouch" class="tbtn" type="button">웅크리기</button>
+          <button id="tProne" class="tbtn" type="button">엎드리기</button>
+        </div>
+        <div class="tAux">
           <button id="tScope" class="tbtn" type="button">조준경</button>
           <button id="tReload" class="tbtn" type="button">재장전</button>
           <button id="tInteract" class="tbtn" type="button">상호작용</button>
@@ -1915,6 +1922,14 @@ tUp($('tInteract'),()=>releaseKey('KeyF'));
 tDown($('tMap'),()=>tapKey('KeyM'));
 tUp($('tMap'),()=>releaseKey('KeyM'));
 tDown($('tBag'),()=>{ if(G.invOpen)closeInv(true); else openInv(); });
+tDown($('tJump'),()=>tapKey('Space'));
+tUp($('tJump'),()=>releaseKey('Space'));
+tDown($('tSprint'),()=>tapKey('ShiftLeft'));
+tUp($('tSprint'),()=>releaseKey('ShiftLeft'));
+tDown($('tCrouch'),()=>tapKey('KeyC'));
+tUp($('tCrouch'),()=>releaseKey('KeyC'));
+tDown($('tProne'),()=>tapKey('KeyZ'));
+tUp($('tProne'),()=>releaseKey('KeyZ'));
 
 // ---------- player
 // Mouse deltas arrive in uneven bursts; feed them into the view over a couple of frames

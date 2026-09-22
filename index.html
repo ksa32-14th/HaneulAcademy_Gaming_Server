@@ -1502,7 +1502,7 @@ const GUNSND={
 };
 function shotSound(pos,key,own){
   if(!AC||!player) return;
-  const P=GUNSND[key],d=own?0:pos.distanceTo(player.pos); if(d>650) return;
+  const P=GUNSND[key],d=own?0:pos.distanceTo(player.pos); if(d>300) return;   // far-off gunfire isn't worth synthesizing - it was audible across nearly the whole island and piled up nodes fast
   const near=clamp(1-d/180,0,1),vol=P.vol*(own?1:1/(1+d*0.018));
   const bus=spatial(own?null:pos,(0.2+0.6*(1-near))*P.tail);
   const t=AC.currentTime+(own?0:d/343);             // sound travels at 343 m/s
@@ -1550,9 +1550,11 @@ function pickupSound(type){
   }
 }
 function footstepSound(a){
-  if(!AC||!player) return; const d=a.pos.distanceTo(player.pos); if(d>45) return;
+  // close-range only: at 45m this fired for every bot within earshot of a crowded endgame circle
+  // and was a big chunk of the audio-node overload that eventually choked playback entirely
+  if(!AC||!player) return; const d=a.pos.distanceTo(player.pos); if(d>5) return;
   const bus=spatial(a.pos,0.03),t=AC.currentTime;
-  const vol=(a.sprinting?0.24:a.stance==='crouch'?0.07:0.15)*clamp(1-d/45,0.12,1);
+  const vol=(a.sprinting?0.24:a.stance==='crouch'?0.07:0.15)*clamp(1-d/5,0.3,1);
   nz(t,bus,{type:'lowpass',f:480,f2:170,a:0.002,dur:0.055,vol});
   nz(t,bus,{type:'bandpass',f:1300,q:0.6,a:0.001,dur:0.03,vol:vol*0.4});
 }
@@ -2175,8 +2177,15 @@ function updatePlayer(dt){
   // lean: Q left / E right (hold)
   const lt=(p.stance==='prone'||p.sprinting||p.vault)?0:(keys.KeyE?1:0)-(keys.KeyQ?1:0);
   p.lean=lerp(p.lean,lt,Math.min(1,dt*10));
-  // recoil recovery once the trigger is released
-  if(p.fireCd<-0.08&&G.recoilAcc>0){const r=Math.min(G.recoilAcc,dt*0.7);p.pitch-=r*0.55;G.recoilAcc-=r;}
+  // recoil recovery once the trigger is released - gated on time-since-last-shot (not on fireCd
+  // going negative), because fireCd IS the weapon's full next-shot cooldown: for a slow bolt-action
+  // like Kar98k that's 1.4s, so gating on "fireCd<-0.08" meant recovery sat frozen for over a second
+  // after every shot and then dumped the whole kick back at once - a jarring delayed snap-down.
+  {
+    const pw=p.weapon();
+    const shotGap=pw?60/WEAPONS[pw.key].rpm:0;
+    if(p.fireCd<shotGap-0.08&&G.recoilAcc>0){const r=Math.min(G.recoilAcc,dt*0.7);p.pitch-=r*0.55;G.recoilAcc-=r;}
+  }
   if(p.vault) updateVault(p,dt);
   else{
     if(!standUp&&pressed.has('Space')&&p.onGround&&!p.inWater&&!tryVault(p)){p.vy=7.4;p.onGround=false;}
@@ -2785,9 +2794,14 @@ function drawMap(ctx,W,H,cx,cz,span,big){
     'ABCDEF'.split('').forEach((l,i)=>ctx.fillText(l,wx(-300+i*100+46),16*lw*0.6));
     for(let i=0;i<6;i++)ctx.fillText(String(i+1),8,wz(-300+i*100+54));
   }
-  ctx.save();ctx.beginPath();ctx.rect(0,0,W,H);ctx.arc(wx(Z.cx),wz(Z.cz),Math.max(0,Z.r*sc),0,Math.PI*2,true);ctx.fillStyle='rgba(50,90,230,.33)';ctx.fill();ctx.restore();
-  ctx.lineWidth=1.5*lw;ctx.strokeStyle='#5b93ff';ctx.beginPath();ctx.arc(wx(Z.cx),wz(Z.cz),Math.max(0,Z.r*sc),0,Math.PI*2);ctx.stroke();
-  if(Z.mode==='wait'){ctx.strokeStyle='#fff';ctx.beginPath();ctx.arc(wx(Z.tx),wz(Z.tz),Math.max(0,Z.tr*sc),0,Math.PI*2);ctx.stroke();}
+  // deathmatch has no blue zone at all - and Z can otherwise briefly hold NaN/undefined right after
+  // a match starts (before the first zone tick/state sync lands), which silently drew no circle at
+  // all rather than erroring, looking like the zone had "intermittently disappeared"
+  if(!G.dm&&Number.isFinite(Z.r)&&Number.isFinite(Z.cx)&&Number.isFinite(Z.cz)){
+    ctx.save();ctx.beginPath();ctx.rect(0,0,W,H);ctx.arc(wx(Z.cx),wz(Z.cz),Math.max(0,Z.r*sc),0,Math.PI*2,true);ctx.fillStyle='rgba(50,90,230,.33)';ctx.fill();ctx.restore();
+    ctx.lineWidth=1.5*lw;ctx.strokeStyle='#5b93ff';ctx.beginPath();ctx.arc(wx(Z.cx),wz(Z.cz),Math.max(0,Z.r*sc),0,Math.PI*2);ctx.stroke();
+    if(Z.mode==='wait'&&Number.isFinite(Z.tr)&&Number.isFinite(Z.tx)&&Number.isFinite(Z.tz)){ctx.strokeStyle='#fff';ctx.beginPath();ctx.arc(wx(Z.tx),wz(Z.tz),Math.max(0,Z.tr*sc),0,Math.PI*2);ctx.stroke();}
+  }
   if(plane&&plane.active&&player.state==='plane'){
     ctx.setLineDash([6*lw,5*lw]);ctx.strokeStyle='rgba(255,255,255,.8)';ctx.beginPath();
     const e=plane.start.clone().addScaledVector(plane.dir,plane.len);ctx.moveTo(wx(plane.start.x),wz(plane.start.z));ctx.lineTo(wx(e.x),wz(e.z));ctx.stroke();ctx.setLineDash([]);
@@ -2798,7 +2812,7 @@ function drawMap(ctx,W,H,cx,cz,span,big){
     ctx.textAlign='start';
   }
   const p=player.state==='plane'?plane.pos:player.pos;
-  const out=Math.hypot(p.x-Z.cx,p.z-Z.cz)>Z.r||Z.mode==='wait'&&Math.hypot(p.x-Z.tx,p.z-Z.tz)>Z.tr;
+  const out=!G.dm&&Number.isFinite(Z.r)&&(Math.hypot(p.x-Z.cx,p.z-Z.cz)>Z.r||Z.mode==='wait'&&Math.hypot(p.x-Z.tx,p.z-Z.tz)>Z.tr);
   if(out&&player.state!=='plane'){const tx=Z.mode==='wait'?Z.tx:Z.cx,tz=Z.mode==='wait'?Z.tz:Z.cz;ctx.setLineDash([3*lw,4*lw]);ctx.strokeStyle='rgba(255,255,255,.7)';ctx.lineWidth=lw;ctx.beginPath();ctx.moveTo(wx(p.x),wz(p.z));ctx.lineTo(wx(tx),wz(tz));ctx.stroke();ctx.setLineDash([]);}
   ctx.save();ctx.translate(wx(p.x),wz(p.z));ctx.rotate(-player.yaw);ctx.scale(lw,lw);
   ctx.fillStyle='#f2b33d';ctx.strokeStyle='#1a1405';ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(0,-8);ctx.lineTo(5.5,6);ctx.lineTo(0,3);ctx.lineTo(-5.5,6);ctx.closePath();ctx.fill();ctx.stroke();ctx.restore();

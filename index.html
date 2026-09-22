@@ -166,6 +166,27 @@ button.go.small{padding:9px 18px;font-size:13px;letter-spacing:.08em}
   .wslot{min-width:130px}
   #meds{flex-direction:column}
 }
+/* touch controls (phones/tablets - no mouse/keyboard) */
+#touchCtl{position:absolute;inset:0}
+#tLook{position:absolute;inset:0;pointer-events:auto;touch-action:none}
+#tStick{position:absolute;left:20px;bottom:20px;width:132px;height:132px;border-radius:50%;background:rgba(236,239,230,.08);border:1px solid var(--line);pointer-events:auto;touch-action:none}
+#tStickNub{position:absolute;left:50%;top:50%;width:56px;height:56px;margin:-28px 0 0 -28px;border-radius:50%;background:rgba(242,179,61,.5);border:1px solid rgba(242,179,61,.8);transition:transform .05s linear}
+#tButtons{position:absolute;right:16px;bottom:16px;display:flex;flex-direction:column;align-items:flex-end;gap:12px;pointer-events:none}
+#tAux{display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end;max-width:220px}
+.tbtn{pointer-events:auto;touch-action:none;-webkit-user-select:none;user-select:none;font-family:var(--disp);font-weight:700;font-size:11.5px;letter-spacing:.02em;width:56px;height:56px;border-radius:50%;background:rgba(10,15,19,.55);border:1px solid var(--line);color:var(--text);display:flex;align-items:center;justify-content:center;text-align:center;line-height:1.1;-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px)}
+.tbtn:active{background:rgba(242,179,61,.35);border-color:rgba(242,179,61,.7)}
+#tFire{width:84px;height:84px;font-size:14px;background:rgba(255,75,62,.26);border-color:rgba(255,75,62,.6)}
+#tFire:active{background:rgba(255,75,62,.5)}
+#tPause{position:absolute;top:220px;right:14px;width:40px;height:40px;font-size:15px}
+/* the virtual joystick sits where #meds normally does, and the button cluster covers the usual
+   weapon-slot corner - push both HUD elements clear of the touch controls */
+body.touch #meds{bottom:160px}
+body.touch #weapons{bottom:260px}
+.toggleRow{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--muted);pointer-events:auto}
+.toggleRow input[type=checkbox]{appearance:none;-webkit-appearance:none;width:38px;height:22px;border-radius:999px;background:rgba(236,239,230,.18);border:1px solid var(--line);position:relative;cursor:pointer;flex:none;margin:0;transition:background .15s}
+.toggleRow input[type=checkbox]::before{content:"";position:absolute;left:2px;top:2px;width:16px;height:16px;border-radius:50%;background:var(--text);transition:transform .15s}
+.toggleRow input[type=checkbox]:checked{background:rgba(242,179,61,.65);border-color:rgba(242,179,61,.8)}
+.toggleRow input[type=checkbox]:checked::before{transform:translateX(16px);background:#1a1405}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 
@@ -211,6 +232,21 @@ button.go.small{padding:9px 18px;font-size:13px;letter-spacing:.08em}
       <div id="hp"><i id="hpGhost"></i><i id="hpFill"></i><i id="hpLimit"></i></div>
     </div>
     <div id="weapons"></div>
+    <div id="touchCtl" hidden>
+      <div id="tLook"></div>
+      <button id="tPause" class="tbtn" type="button">⏸</button>
+      <div id="tStick"><div id="tStickNub"></div></div>
+      <div id="tButtons">
+        <div id="tAux">
+          <button id="tScope" class="tbtn" type="button">조준경</button>
+          <button id="tReload" class="tbtn" type="button">재장전</button>
+          <button id="tInteract" class="tbtn" type="button">상호작용</button>
+          <button id="tBag" class="tbtn" type="button">가방</button>
+          <button id="tMap" class="tbtn" type="button">지도</button>
+        </div>
+        <button id="tFire" class="tbtn" type="button">발사</button>
+      </div>
+    </div>
   </div>
 
   <canvas id="bigmap" hidden></canvas>
@@ -251,11 +287,11 @@ button.go.small{padding:9px 18px;font-size:13px;letter-spacing:.08em}
         <label for="sensMain1">감도</label><input type="range" id="sensMain1" data-sens="main" min="0.2" max="3" step="0.05" value="1"><output data-out="main">1.00</output>
         <label for="sensAim1">조준 감도</label><input type="range" id="sensAim1" data-sens="aim" min="0.2" max="3" step="0.05" value="1"><output data-out="aim">1.00</output>
       </div>
+      <label class="toggleRow"><input type="checkbox" data-touch-toggle>터치 컨트롤 (모바일)</label>
       <div class="btnRow">
         <button id="startBtn" class="go" type="button">출격</button>
         <button id="mpOpenBtn" class="go alt" type="button">함께 플레이</button>
       </div>
-      <p class="note" id="touchNote" hidden>키보드와 마우스가 필요합니다.</p>
     </div>
   </div>
 
@@ -301,6 +337,7 @@ button.go.small{padding:9px 18px;font-size:13px;letter-spacing:.08em}
         <label for="sensMain2">감도</label><input type="range" id="sensMain2" data-sens="main" min="0.2" max="3" step="0.05" value="1"><output data-out="main">1.00</output>
         <label for="sensAim2">조준 감도</label><input type="range" id="sensAim2" data-sens="aim" min="0.2" max="3" step="0.05" value="1"><output data-out="aim">1.00</output>
       </div>
+      <label class="toggleRow"><input type="checkbox" data-touch-toggle>터치 컨트롤 (모바일)</label>
       <button id="resumeBtn" class="go" type="button">계속</button>
     </div>
   </div>
@@ -1819,6 +1856,66 @@ document.addEventListener('pointerlockchange',()=>{
 });
 document.addEventListener('pointerlockerror',lockFail);
 
+// ---------- touch controls (phones/tablets)
+// Left thumb: virtual joystick -> the same WASD booleans the keyboard path sets, so movement code
+// downstream never needs to know the difference. Right thumb: drag anywhere to look (feeds G.lookX/Y
+// exactly like the mousemove handler above) plus a fire button and small auxiliary buttons for
+// everything that's a single tap on a keyboard (scope, reload, interact, bag, map) - a real "two
+// thumbs, occasional taps" layout rather than trying to cram a full keyboard onto the screen.
+function tapKey(code){ if(!keys[code])pressed.add(code); keys[code]=true; }
+function releaseKey(code){ keys[code]=false; }
+function tDown(el,fn){ el.addEventListener('pointerdown',e=>{ e.preventDefault(); fn(e); }); }
+function tUp(el,fn){ el.addEventListener('pointerup',e=>{ e.preventDefault(); fn(e); }); el.addEventListener('pointercancel',e=>{ e.preventDefault(); fn(e); }); }
+(function(){
+  const stick=$('tStick'),nub=$('tStickNub');
+  let stickId=null,cx=0,cy=0;
+  const MAXR=52,DEAD=MAXR*0.28;
+  function resetStick(){ keys.KeyW=keys.KeyA=keys.KeyS=keys.KeyD=false; nub.style.transform='translate(0px,0px)'; }
+  tDown(stick,e=>{
+    if(stickId!==null)return;
+    stickId=e.pointerId; stick.setPointerCapture(stickId);
+    const r=stick.getBoundingClientRect(); cx=r.left+r.width/2; cy=r.top+r.height/2;
+  });
+  stick.addEventListener('pointermove',e=>{
+    if(e.pointerId!==stickId)return;
+    e.preventDefault();
+    let dx=e.clientX-cx,dy=e.clientY-cy;
+    const d=Math.hypot(dx,dy); if(d>MAXR){dx=dx/d*MAXR;dy=dy/d*MAXR;}
+    nub.style.transform=`translate(${dx}px,${dy}px)`;
+    keys.KeyD=dx>DEAD;keys.KeyA=dx<-DEAD;keys.KeyW=dy<-DEAD;keys.KeyS=dy>DEAD;
+  });
+  tUp(stick,e=>{ if(e.pointerId!==stickId)return; stickId=null; resetStick(); });
+})();
+(function(){
+  const look=$('tLook');
+  let lookId=null,lastX=0,lastY=0;
+  tDown(look,e=>{
+    if(lookId!==null)return;
+    lookId=e.pointerId; look.setPointerCapture(lookId); lastX=e.clientX; lastY=e.clientY;
+  });
+  look.addEventListener('pointermove',e=>{
+    if(e.pointerId!==lookId)return;
+    e.preventDefault();
+    const dx=e.clientX-lastX,dy=e.clientY-lastY; lastX=e.clientX; lastY=e.clientY;
+    if(G.state!=='play'||G.paused||G.invOpen||!player||!player.alive) return;
+    const aiming=G.scoped||G.ads||G.aimScope;
+    const s=0.0022*G.sens.main*(aiming?G.sens.aim:1)/(G.scoped?4:aiming?1.6:1);
+    G.lookX-=dx*s;G.lookY-=dy*s;
+  });
+  tUp(look,e=>{ if(e.pointerId!==lookId)return; lookId=null; });
+})();
+tDown($('tFire'),()=>{ if(!AC)initAudio(); if(AC&&AC.state!=='running')AC.resume(); mouse.left=true;mouse.clicked=true; });
+tUp($('tFire'),()=>{ mouse.left=false; });
+tDown($('tScope'),()=>{ mouse.right=true;mouse.rDown=performance.now(); });
+tUp($('tScope'),()=>{ if(mouse.right&&performance.now()-mouse.rDown<200)mouse.rTap=true; mouse.right=false; });
+tDown($('tReload'),()=>tapKey('KeyR'));
+tUp($('tReload'),()=>releaseKey('KeyR'));
+tDown($('tInteract'),()=>tapKey('KeyF'));
+tUp($('tInteract'),()=>releaseKey('KeyF'));
+tDown($('tMap'),()=>tapKey('KeyM'));
+tUp($('tMap'),()=>releaseKey('KeyM'));
+tDown($('tBag'),()=>{ if(G.invOpen)closeInv(true); else openInv(); });
+
 // ---------- player
 // Mouse deltas arrive in uneven bursts; feed them into the view over a couple of frames
 // (time constant ~18ms) so turning glides instead of stepping, without noticeable lag.
@@ -2769,8 +2866,32 @@ document.querySelectorAll('[data-sens]').forEach(el=>el.addEventListener('input'
 syncSens();
 $('startBtn').addEventListener('click',start);
 $('againBtn').addEventListener('click',restartOrMenu);
-$('resumeBtn').addEventListener('click',requestLock);
-if(matchMedia('(pointer: coarse)').matches&&!matchMedia('(pointer: fine)').matches)$('touchNote').hidden=false;
+$('resumeBtn').addEventListener('click',()=>{
+  // desktop resumes via the pointerlockchange event once the lock re-engages; touch has no pointer
+  // lock to re-engage, so it has to unpause directly here instead
+  if(touchUIOn){ G.paused=false;$('pause').hidden=true; } else requestLock();
+});
+// touch-only devices (phones/tablets, no real mouse) get the on-screen control layer instead of
+// pointer lock + WASD. Auto-detected as a default, but overridable any time via the toggle on the
+// menu and pause screens - a touchscreen laptop with a trackpad might want it off, someone testing
+// on desktop might want it on, etc. Remembered per browser like the sensitivity sliders.
+let touchUIOn=(()=>{
+  try{const v=localStorage.getItem('lc-touch'); if(v==='1')return true; if(v==='0')return false;}catch(e){}
+  return matchMedia('(pointer: coarse)').matches&&!matchMedia('(pointer: fine)').matches;
+})();
+function setTouchUI(on){
+  touchUIOn=!!on;
+  try{localStorage.setItem('lc-touch',touchUIOn?'1':'0');}catch(e){}
+  $('touchCtl').hidden=!touchUIOn;
+  document.body.classList.toggle('touch',touchUIOn);
+  G.noLock=touchUIOn;
+  if(touchUIOn){ mouse.left=mouse.right=false; try{document.exitPointerLock&&document.pointerLockElement&&document.exitPointerLock();}catch(e){} }
+  else if(G.state==='play'&&!G.paused&&!G.invOpen) requestLock();
+  document.querySelectorAll('[data-touch-toggle]').forEach(el=>{el.checked=touchUIOn;});
+}
+document.querySelectorAll('[data-touch-toggle]').forEach(el=>el.addEventListener('change',()=>setTouchUI(el.checked)));
+setTouchUI(touchUIOn);
+tDown($('tPause'),()=>{ if(G.state==='play'&&!G.invOpen){G.paused=true;$('pause').hidden=false;mouse.left=mouse.right=false;} });
 addEventListener('resize',()=>{renderer.setSize(innerWidth,innerHeight);camera.aspect=fpCam.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();fpCam.updateProjectionMatrix();});
 
 // menu showcase: a few idle characters in the central town

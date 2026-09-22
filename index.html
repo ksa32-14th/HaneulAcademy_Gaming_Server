@@ -2799,6 +2799,18 @@ const SHOW=(()=>{
 // interpolated puppet (stepPuppet). This is a first pass with no way for me to test it against a
 // second real machine — expect rough edges, especially through restrictive networks (see below).
 let peer=null;
+// STUN alone can't traverse every NAT (symmetric NAT, some school/corporate firewalls) - when that
+// happens the WebRTC handshake just hangs forever with no error event from PeerJS. Free TURN relay
+// servers (Open Relay Project) give the connection a fallback path in that case; replacing PeerJS's
+// default iceServers means we re-list Google's public STUN too, not just the TURN entries.
+const NET_ICE={iceServers:[
+  {urls:'stun:stun.l.google.com:19302'},
+  {urls:'stun:stun1.l.google.com:19302'},
+  {urls:'stun:openrelay.metered.ca:80'},
+  {urls:'turn:openrelay.metered.ca:80',username:'openrelayproject',credential:'openrelayproject'},
+  {urls:'turn:openrelay.metered.ca:443',username:'openrelayproject',credential:'openrelayproject'},
+  {urls:'turn:openrelay.metered.ca:443?transport=tcp',username:'openrelayproject',credential:'openrelayproject'}
+]};
 function netName(){
   let n=($('mpName').value||'').trim().slice(0,12);
   if(!n)n='Player'+Math.floor(Math.random()*900+100);
@@ -2832,7 +2844,7 @@ function createRoom(){
   const name=netName(),code=randCode();
   netTeardownPeer();
   netRoomMsg('연결 중...','mpHomeMsg');
-  try{ peer=new Peer('lastcircle-'+code.toLowerCase(),{debug:0}); }
+  try{ peer=new Peer('lastcircle-'+code.toLowerCase(),{debug:0,config:NET_ICE}); }
   catch(e){ netRoomMsg('이 브라우저/네트워크에서는 방을 열 수 없습니다.','mpHomeMsg'); return; }
   peer.on('open',()=>{
     G.net={mode:'host',myId:'host',myName:name,roomCode:code,total:20,started:false,
@@ -2879,13 +2891,23 @@ function joinRoom(){
   if(code.length<5){netRoomMsg('5자리 방 코드를 입력해 주세요.','mpHomeMsg');return;}
   netTeardownPeer();
   netRoomMsg('입장 중...','mpHomeMsg');
-  try{ peer=new Peer({debug:0}); }
+  try{ peer=new Peer({debug:0,config:NET_ICE}); }
   catch(e){ netRoomMsg('이 브라우저/네트워크에서는 참여할 수 없습니다.','mpHomeMsg'); return; }
   peer.on('open',myId=>{
     const conn=peer.connect('lastcircle-'+code.toLowerCase(),{reliable:true});
     G.net={mode:'client',myId,myName:name,roomCode:code,hostConn:conn,total:0,
       players:new Map(),tickAcc:0,endedLocally:false};
+    // WebRTC handshakes that can't traverse the network just hang with no open/error event -
+    // without this timeout "입장 중..." would sit there forever with no feedback
+    const joinTimer=setTimeout(()=>{
+      if(G.net.mode==='client'&&!conn.open){
+        netRoomMsg('연결이 너무 오래 걸립니다. 네트워크가 막고 있을 수 있습니다. 다른 네트워크(휴대폰 핫스팟 등)로 시도해 보세요.','mpHomeMsg');
+        netTeardownPeer();G.net={mode:'off'};
+      }
+    },15000);
     conn.on('open',()=>{
+      clearTimeout(joinTimer);
+      if(G.net.mode!=='client')return;
       sendTo(conn,{type:'join',name});
       $('lobbyHome').hidden=true;$('lobbyRoom').hidden=false;
       $('roomCode').textContent=code;
@@ -2894,8 +2916,8 @@ function joinRoom(){
       renderLobby();
     });
     conn.on('data',msg=>onClientMessage(msg));
-    conn.on('close',()=>{ if(G.net.mode==='client'&&G.state!=='play'){netRoomMsg('호스트와 연결이 끊어졌습니다.');} });
-    conn.on('error',()=>{ netRoomMsg('연결에 실패했습니다. 코드를 확인해 주세요.','mpHomeMsg'); });
+    conn.on('close',()=>{ clearTimeout(joinTimer); if(G.net.mode==='client'&&G.state!=='play'){netRoomMsg('호스트와 연결이 끊어졌습니다.');} });
+    conn.on('error',()=>{ clearTimeout(joinTimer); netRoomMsg('연결에 실패했습니다. 코드를 확인해 주세요.','mpHomeMsg'); });
   });
   peer.on('error',e=>{
     const t=e&&e.type;

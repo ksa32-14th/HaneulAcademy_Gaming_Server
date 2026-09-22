@@ -2799,18 +2799,24 @@ const SHOW=(()=>{
 // interpolated puppet (stepPuppet). This is a first pass with no way for me to test it against a
 // second real machine — expect rough edges, especially through restrictive networks (see below).
 let peer=null;
-// STUN alone can't traverse every NAT (symmetric NAT, some school/corporate firewalls) - when that
-// happens the WebRTC handshake just hangs forever with no error event from PeerJS. Free TURN relay
-// servers (Open Relay Project) give the connection a fallback path in that case; replacing PeerJS's
-// default iceServers means we re-list Google's public STUN too, not just the TURN entries.
-const NET_ICE={iceServers:[
-  {urls:'stun:stun.l.google.com:19302'},
-  {urls:'stun:stun1.l.google.com:19302'},
-  {urls:'stun:openrelay.metered.ca:80'},
-  {urls:'turn:openrelay.metered.ca:80',username:'openrelayproject',credential:'openrelayproject'},
-  {urls:'turn:openrelay.metered.ca:443',username:'openrelayproject',credential:'openrelayproject'},
-  {urls:'turn:openrelay.metered.ca:443?transport=tcp',username:'openrelayproject',credential:'openrelayproject'}
-]};
+// STUN alone can't traverse every NAT (symmetric NAT, client-isolated school/corporate wifi) - when
+// that happens the WebRTC handshake just hangs forever with no error event from PeerJS. A TURN relay
+// gives the connection a fallback path in that case. Metered's credential API hands back short-lived
+// TURN credentials for our own project; if that fetch ever fails (offline, quota, endpoint down) we
+// fall back to STUN-only, which still works for anyone not behind a hard NAT/firewall.
+const NET_STUN_ONLY=[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'}];
+const NET_TURN_ENDPOINT='https://haneulacademygamingserver.metered.live/api/v1/turn/credentials?apiKey=84d5d80272488f0fb4e31f9a0cfe3af1ed57';
+let iceCache=null,iceCacheAt=0;
+async function getIceServers(){
+  if(iceCache&&Date.now()-iceCacheAt<8*60*1000) return iceCache;
+  try{
+    const r=await fetch(NET_TURN_ENDPOINT);
+    if(!r.ok) throw 0;
+    const servers=await r.json();
+    if(Array.isArray(servers)&&servers.length){iceCache=servers;iceCacheAt=Date.now();return servers;}
+  }catch(e){}
+  return NET_STUN_ONLY;
+}
 function netName(){
   let n=($('mpName').value||'').trim().slice(0,12);
   if(!n)n='Player'+Math.floor(Math.random()*900+100);
@@ -2834,17 +2840,22 @@ function backToMenuFromLobby(){
   netTeardownPeer();G.net={mode:'off'};
   $('lobbyHome').hidden=true;$('lobbyRoom').hidden=true;$('menu').hidden=false;
 }
+let netAttempt=0;
 function netTeardownPeer(){
+  netAttempt++;
   try{ if(peer){peer.destroy();} }catch(e){}
   peer=null;
 }
 const ROOM_CHARS='ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // no 0/O/1/I — easier to read aloud/type
 function randCode(){let s='';for(let i=0;i<5;i++)s+=ROOM_CHARS[Math.floor(Math.random()*ROOM_CHARS.length)];return s;}
-function createRoom(){
+async function createRoom(){
   const name=netName(),code=randCode();
   netTeardownPeer();
+  const myAttempt=netAttempt;
   netRoomMsg('연결 중...','mpHomeMsg');
-  try{ peer=new Peer('lastcircle-'+code.toLowerCase(),{debug:0,config:NET_ICE}); }
+  const iceServers=await getIceServers();
+  if(myAttempt!==netAttempt) return; // superseded (user navigated away) while the ICE fetch was in flight
+  try{ peer=new Peer('lastcircle-'+code.toLowerCase(),{debug:0,config:{iceServers}}); }
   catch(e){ netRoomMsg('이 브라우저/네트워크에서는 방을 열 수 없습니다.','mpHomeMsg'); return; }
   peer.on('open',()=>{
     G.net={mode:'host',myId:'host',myName:name,roomCode:code,total:20,started:false,
@@ -2886,12 +2897,15 @@ function createRoom(){
     if(G.net.mode!=='host'||!G.net.roomCode) netRoomMsg(msg,'mpHomeMsg'); else netRoomMsg(msg);
   });
 }
-function joinRoom(){
+async function joinRoom(){
   const name=netName(),code=($('mpCode').value||'').trim().toUpperCase();
   if(code.length<5){netRoomMsg('5자리 방 코드를 입력해 주세요.','mpHomeMsg');return;}
   netTeardownPeer();
+  const myAttempt=netAttempt;
   netRoomMsg('입장 중...','mpHomeMsg');
-  try{ peer=new Peer({debug:0,config:NET_ICE}); }
+  const iceServers=await getIceServers();
+  if(myAttempt!==netAttempt) return;
+  try{ peer=new Peer({debug:0,config:{iceServers}}); }
   catch(e){ netRoomMsg('이 브라우저/네트워크에서는 참여할 수 없습니다.','mpHomeMsg'); return; }
   peer.on('open',myId=>{
     const conn=peer.connect('lastcircle-'+code.toLowerCase(),{reliable:true});

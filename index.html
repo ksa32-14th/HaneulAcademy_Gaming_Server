@@ -3082,12 +3082,18 @@ function netOnKillHost(v,k,wname,head,alive){
 // ---------- runtime tick: host broadcasts world state, client reports its own input ----------
 function netTick(dt){
   if(!G.net.started)return;
-  G.net.tickAcc=(G.net.tickAcc||0)+dt; if(G.net.tickAcc<1/15) return; G.net.tickAcc=0;
+  G.net.tickAcc=(G.net.tickAcc||0)+dt; if(G.net.tickAcc<1/10) return; G.net.tickAcc=0;
   if(G.net.mode==='host') hostBroadcastState();
   else if(G.net.mode==='client') clientSendInput();
 }
+// Wire format is deliberately compact - the broadcast below goes to every connected client every
+// tick, and on a network that needs TURN relay (client-isolated wifi, restrictive NAT) that traffic
+// counts against a metered TURN quota. Coarser number precision and small int codes instead of
+// repeating stance/state strings 50x/tick meaningfully cut the JSON size at no perceptible cost.
+const NET_STANCE=['stand','crouch','prone'],NET_STATE=['ground','fall','chute','plane'];
+const nq2=n=>Math.round(n*100)/100, nq3=n=>Math.round(n*1000)/1000;
 function hostBroadcastState(){
-  const a=actors.map(x=>{const w=x.weapon();return[x.id,x.pos.x,x.pos.y,x.pos.z,x.yaw,x.pitch,x.stance,x.state,Math.max(0,Math.round(x.hp)),x.alive?1:0,x.vest,x.helmet,x.kills,x.sprinting?1:0,w?w.key:null];});
+  const a=actors.map(x=>{const w=x.weapon();return[x.id,nq2(x.pos.x),nq2(x.pos.y),nq2(x.pos.z),nq3(x.yaw),nq3(x.pitch),NET_STANCE.indexOf(x.stance),NET_STATE.indexOf(x.state),Math.max(0,Math.round(x.hp)),x.alive?1:0,x.vest,x.helmet,x.kills,x.sprinting?1:0,w?w.key:null];});
   const msg={type:'state',z:{cx:Z.cx,cz:Z.cz,r:Z.r,mode:Z.mode,timer:Z.timer,phase:Z.phase,tx:Z.tx,tz:Z.tz,tr:Z.tr},a};
   if(G.net.diffTake&&G.net.diffTake.length){msg.take=G.net.diffTake;G.net.diffTake=[];}
   if(G.net.diffDrop&&G.net.diffDrop.length){msg.drop=G.net.diffDrop;G.net.diffDrop=[];}
@@ -3096,7 +3102,8 @@ function hostBroadcastState(){
 function clientApplyState(msg){
   Object.assign(Z,msg.z);
   for(const e of msg.a){
-    const[id,x,y,z,yaw,pitch,stance,state,hp,alive,vest,helmet,kills,sprinting,wkey]=e;
+    const[id,x,y,z,yaw,pitch,stanceI,stateI,hp,alive,vest,helmet,kills,sprinting,wkey]=e;
+    const stance=NET_STANCE[stanceI]||'stand',state=NET_STATE[stateI]||'ground';
     const a=actors.find(o=>o.id===id); if(!a)continue;
     if(a===player){ a.hp=hp;a.alive=!!alive;a.vest=vest;a.helmet=helmet;a.kills=kills; continue; }
     a.net.x=x;a.net.y=y;a.net.z=z;a.net.yaw=yaw;a.net.pitch=pitch;a.net.got=true;

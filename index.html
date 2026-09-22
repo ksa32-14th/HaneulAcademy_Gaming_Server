@@ -1088,7 +1088,23 @@ function buildDeathmatchMap(){
   WALL_COLS.length=0;WALL_COLS.push(...savedWall);
   ROOF_COLS.length=0;ROOF_COLS.push(...savedRoof);
 }
-buildDeathmatchMap();
+// the BR world's walls/roofs are batched into InstancedMeshes once, right after BR world-gen
+// finishes (see the colorInst() calls above) - anything addBox()/building() adds after that point
+// (every DM wall, mountain pillar and bunker) still lands in DRAW/GABLES but never gets its own
+// render batch, so it was invisible even though collision worked fine. Batch the DM-only slice
+// of those arrays separately here instead of touching the already-built BR batches.
+{
+  const drawFrom=DRAW.length,gableFrom=GABLES.length;
+  buildDeathmatchMap();
+  colorInst(new THREE.BoxGeometry(1,1,1),DRAW.slice(drawFrom),it=>{const b=it.b;_p.set((b.minX+b.maxX)/2,(b.minY+b.maxY)/2,(b.minZ+b.maxZ)/2);_s.set(b.maxX-b.minX,b.maxY-b.minY,b.maxZ-b.minZ);_c.setHex(it.color);});
+  if(GABLES.length>gableFrom){
+    const v=[],A=[-.5,0,-.5],B=[-.5,0,.5],C=[-.5,1,0],A2=[.5,0,-.5],B2=[.5,0,.5],C2=[.5,1,0];
+    const tri=(p,q,r)=>v.push(...p,...q,...r);
+    tri(A,B,C);tri(A2,C2,B2);tri(A,C,C2);tri(A,C2,A2);tri(B,B2,C2);tri(B,C2,C);
+    const pg=new THREE.BufferGeometry();pg.setAttribute('position',new THREE.Float32BufferAttribute(v,3));pg.computeVertexNormals();
+    colorInst(pg,GABLES.slice(gableFrom),g=>{_p.set(g.cx,g.y,g.cz);_q.setFromAxisAngle(new V3(0,1,0),-g.r*Math.PI/2);_s.set(g.W,g.h,g.D);_c.setHex(g.color);});
+  }
+}
 
 // ---------- queries
 const Q1=[],Q2=[];

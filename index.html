@@ -1185,6 +1185,7 @@ function flatBuilding(cx,cz,w,d,rot,style,base){
     doorOut:e.pt(doorC,-hd-1.4),doorIn:e.pt(doorC,-hd+1.1),stairs:null,gate:null};
   BLD.push(bl);
   DM_PROPS.push({x0:bl.x0,x1:bl.x1,z0:bl.z0,z1:bl.z1,type:'building'});
+  return {x0:bl.x0,x1:bl.x1,z0:bl.z0,z1:bl.z1,h,wallT:wt,roofY:base+h+0.22};
 }
 function buildDeathmatchMap(){
   // mountain-ring sizing, computed up front so the ground plane and the peaks themselves can never
@@ -1312,34 +1313,36 @@ function buildDeathmatchMap(){
     return {x:bx,z:bz};
   }
   DM_BUNKERS=[bunker(-BASE_DX,0),bunker(BASE_DX,1)];
-  // MG rooftop tower: the separate hill terrain tier is gone entirely (map back to a flat basin ->
-  // ramp -> plateau profile, see dmTerrainH) - the gun now sits on top of a plain grey tower with the
-  // same team-colour ID band as the bunker, reached by an exterior staircase on the side facing away
-  // from the enemy, with a little sandbag cover on the roof around the gun.
+  // MG rooftop: the separate hill terrain tier is gone entirely (map back to a flat basin -> ramp ->
+  // plateau profile, see dmTerrainH) - the gun sits on the roof of an actual flatBuilding (the same
+  // concrete building type the village uses, just at its largest size) instead of a bespoke tower, so
+  // it reads as "the same kind of building, just bigger" rather than a random new structure. Team-
+  // colour ID band low on the walls (like the bunker), an exterior staircase, and a little sandbag
+  // cover on the roof.
   DM_MGS=[];
   for(const side of [-1,1]){
     const team=side<0?0:1;
-    const tx=DM_OX+side*62,tz=DM_OZ,tw=6,td=6,th=4.2,gy=dmGroundY(tx);
-    const x0=tx-tw/2,x1=tx+tw/2,z0=tz-td/2,z1=tz+td/2,y0=gy,y1=gy+th;
-    const col=0x8a8d86,tc=BUNKER_TEAM_COL[team];
-    addBox(x0,y0,z0,x1,y1,z1,col);
-    const by0=y0+th*0.4,by1=y0+th*0.55;
-    addBox(x0-0.02,by0,z0-0.02,x1+0.02,by1,z0+0.02,tc,{collide:false});
-    addBox(x0-0.02,by0,z1-0.02,x1+0.02,by1,z1+0.02,tc,{collide:false});
-    addBox(x0-0.02,by0,z0-0.02,x0+0.02,by1,z1+0.02,tc,{collide:false});
-    addBox(x1-0.02,by0,z0-0.02,x1+0.02,by1,z1+0.02,tc,{collide:false});
-    addBox(x0-0.3,y1,z0-0.3,x1+0.3,y1+0.25,z1+0.3,0x7c8079,{collide:false});
-    DM_PROPS.push({x0,x1,z0,z1,type:'building'});
-    // exterior staircase on the outer face (away from the arena centre / the enemy team)
-    const stepN=10,stepRun=0.3,stepRise=th/stepN,sz0=tz-1.3,sz1=tz+1.3;
+    const tx=DM_OX+side*62,tz=DM_OZ,gy=dmGroundY(tx);
+    const bld=flatBuilding(tx,tz,9,8,0,'conc',gy);
+    const x0=bld.x0,x1=bld.x1,z0=bld.z0,z1=bld.z1,y0=gy,y1=bld.roofY,wt=bld.wallT;
+    const tc=BUNKER_TEAM_COL[team];
+    const by0=y0+0.3,by1=y0+0.65;   // low band, below the window sill so it doesn't cut across one
+    addBox(x0-0.02,by0,z0-0.02,x1+0.02,by1,z0+wt+0.02,tc,{collide:false});
+    addBox(x0-0.02,by0,z1-wt-0.02,x1+0.02,by1,z1+0.02,tc,{collide:false});
+    addBox(x0-0.02,by0,z0-0.02,x0+wt+0.02,by1,z1+0.02,tc,{collide:false});
+    addBox(x1-wt-0.02,by0,z0-0.02,x1+0.02,by1,z1+0.02,tc,{collide:false});
+    // exterior staircase on the INNER face (facing back toward your own bunker/the basin) - the
+    // previous version put it on the far outer face, so reaching it meant walking all the way around
+    // the building first even though you approach from the inner side every time
+    const stepN=10,stepRun=0.3,stepRise=(y1-y0)/stepN,sz0=tz-1.3,sz1=tz+1.3;
     for(let i=1;i<=stepN;i++){
-      const sa=side<0?x0-i*stepRun:x1+(i-1)*stepRun,sb=side<0?x0-(i-1)*stepRun:x1+i*stepRun;
+      const sa=side<0?x1+(i-1)*stepRun:x0-i*stepRun,sb=side<0?x1+i*stepRun:x0-(i-1)*stepRun;
       addBox(Math.min(sa,sb),y0,sz0,Math.max(sa,sb),y0+i*stepRise,sz1,0x76797a);
     }
     // gun sits near the roof's front (basin-facing) edge rather than centred - dead centre left it
-    // shielded by its own tower on shots from below/ahead, so bots down in the basin essentially
+    // shielded by its own building on shots from below/ahead, so bots down in the basin essentially
     // never had a sightline back up at it even when it was actively firing on them
-    const gx=tx-side*1.7;
+    const gx=tx-side*2.4;
     // a little sandbag cover on the roof around the gun, facing the basin
     sandbagRun('z',gx,tz-3,tz-1.2,1.3,y1);
     sandbagRun('z',gx,tz+1.2,tz+3,1.3,y1);
@@ -2188,8 +2191,8 @@ function mountMG(p,mg){
   // time - otherwise dismounting and remounting was a free instant reload, skipping the real one
   p.slots[p.cur]={key:'MG',mag:mg.mag===undefined?WEAPONS.MG.mag:mg.mag};
   p.ammo.MG=Infinity;
-  p.pos.set(mg.x,mg.y,mg.z); p.yaw=mg.yaw; p.pitch=0; p.stance='crouch'; p.vy=0; p.onGround=true; p.reloadT=0;
-  if(mg.mesh) mg.mesh.rotation.y=mg.yaw+Math.PI;
+  p.pos.set(mg.x+Math.sin(mg.yaw)*0.45,mg.y,mg.z+Math.cos(mg.yaw)*0.45); p.yaw=mg.yaw; p.pitch=0; p.stance='crouch'; p.vy=0; p.onGround=true; p.reloadT=0;
+  if(mg.mesh){mg.mesh.rotation.y=mg.yaw+Math.PI;mg.mesh.rotation.x=0;}
 }
 function dismountMG(p){
   const mg=p.mg; if(!mg) return;
@@ -2198,7 +2201,7 @@ function dismountMG(p){
   p.slots[p.cur]=p.mgPrevSlot||null; p.mgPrevSlot=null;
   p.ammo.MG=0; p.reloadT=0;
   if(!p.slots[p.cur]){const s=p.slots.findIndex(Boolean);if(s>=0)p.cur=s;}
-  if(mg.mesh) mg.mesh.rotation.y=mg.yaw+Math.PI;
+  if(mg.mesh){mg.mesh.rotation.y=mg.yaw+Math.PI;mg.mesh.rotation.x=0;}
 }
 function dmKill(v,k,wname,head){
   if(v.mg) dismountMG(v);
@@ -2779,8 +2782,14 @@ function updatePlayer(dt){
     if(!standUp&&pressed.has('Space')&&p.onGround&&!p.inWater&&!p.mg&&!tryVault(p)){p.vy=7.4;p.onGround=false;}
     if(!p.vault) moveActor(p,mx*sp,mz*sp,dt);
   }
-  // tripod-mounted: no walking away from it - pin position/verticals exactly, every frame
-  if(p.mg){p.pos.x=p.mg.x;p.pos.y=p.mg.y;p.pos.z=p.mg.z;p.vy=0;p.onGround=true;if(p.mg.mesh)p.mg.mesh.rotation.y=p.yaw+Math.PI;}
+  // tripod-mounted: no walking away from it, pinned every frame - offset back off the gun's own
+  // pivot point (which is also where the model's geometry is centred) so the camera sits behind the
+  // gun looking over it, not planted inside the model itself; the offset turns with current yaw
+  // since the whole assembly (including the seat) swivels together as the gunner looks around
+  if(p.mg){
+    p.pos.x=p.mg.x+Math.sin(p.yaw)*0.45;p.pos.y=p.mg.y;p.pos.z=p.mg.z+Math.cos(p.yaw)*0.45;p.vy=0;p.onGround=true;
+    if(p.mg.mesh){p.mg.mesh.rotation.y=p.yaw+Math.PI;p.mg.mesh.rotation.x=-p.pitch;}
+  }
   if(!p.mg){
     if(pressed.has('Digit1'))switchTo(p,0);
     if(pressed.has('Digit2'))switchTo(p,1);
@@ -2907,11 +2916,12 @@ function chooseWeapon(b,dist){
     let sc=d.rank; if(d.kind==='shotgun')sc+=dist<12?4:dist>30?-3:0;
     if(d.kind==='sniper')sc+=dist>(G.dm?26:45)?(G.dm?4:3):dist<15?-2:0;
     if(d.kind==='dmr')sc+=dist>(G.dm?14:25)?(G.dm?3:2):dist<10?-2:0;
-    // role bias: snipers/support lean into the DMR/sniper slot even at closer range than the pure
-    // distance rule would pick it at; assault bots lean just as hard the other way, staying on
-    // rapid-fire even at a range they'd otherwise consider swapping to the slow bolt-action at
-    if(G.dm&&b.dmRole==='sniper'&&(d.kind==='sniper'||d.kind==='dmr'))sc+=3;
-    if(G.dm&&b.dmRole==='assault'&&(d.kind==='ar'||d.kind==='smg'))sc+=3;
+    // role bias: a gentle nudge, not a lock - a flat +3 here used to swamp the distance terms above
+    // (e.g. sniper's own dist<15 penalty is only -2), so a sniper-role bot kept the bolt-action at
+    // point-blank range and an assault-role bot ignored a DMR at extreme range. This only breaks
+    // ties in the ambiguous middle distance band; the swings at either extreme still win on their own.
+    if(G.dm&&b.dmRole==='sniper'&&(d.kind==='sniper'||d.kind==='dmr'))sc+=1.2;
+    if(G.dm&&b.dmRole==='assault'&&(d.kind==='ar'||d.kind==='smg'))sc+=1.2;
     if(sc>score){score=sc;best=s;}}
   if(best>=0&&best!==b.cur) switchTo(b,best);
 }
@@ -3111,7 +3121,10 @@ function updateBot(b,dt){
   const l=Math.hypot(mx,mz);if(l>0){mx/=l;mz/=l;}
   if(b.inWater)speed*=0.5;
   moveActor(b,mx*speed,mz*speed,dt);
-  if(b.mg){b.pos.x=b.mg.x;b.pos.y=b.mg.y;b.pos.z=b.mg.z;b.vy=0;b.onGround=true;if(b.mg.mesh)b.mg.mesh.rotation.y=b.yaw+Math.PI;}
+  if(b.mg){
+    b.pos.x=b.mg.x+Math.sin(b.yaw)*0.45;b.pos.y=b.mg.y;b.pos.z=b.mg.z+Math.cos(b.yaw)*0.45;b.vy=0;b.onGround=true;
+    if(b.mg.mesh){b.mg.mesh.rotation.y=b.yaw+Math.PI;b.mg.mesh.rotation.x=-b.pitch;}
+  }
   // stuck/anti-jam recovery now also runs while fighting (not just while following a path) - a bot
   // that chases a target it can see through a window straight through a doorway and then jams up
   // against an interior wall needs to detour/vault free the same way it already did outside combat

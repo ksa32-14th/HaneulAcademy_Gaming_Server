@@ -498,14 +498,15 @@ function P(g,c,x,y,z,rx){const m=M(g,c,x,y,z);if(rx)m.rotation.x=rx;return m;}
 // instead of everyone wandering for a minute before finding anyone.
 const DM_OX=6000,DM_OZ=0,DM_HALF_X=72,DM_HALF_Z=48,DM_GROUND=0;
 function inDM(x,z){return Math.abs(x-DM_OX)<DM_HALF_X&&Math.abs(z-DM_OZ)<DM_HALF_Z;}
-// elevation profile along the long axis: a flat basin down the middle (kept at its original size)
-// and each village sitting up on a flat plateau - height only depends on distance from centre
-// (uniform across Z), like a simple cross-section. There's no separate hill tier any more: the
-// mounted MG moved from a walled hilltop pocket onto a rooftop tower instead (see
-// buildDeathmatchMap), so the plateau just runs flat all the way out to the boundary now. The ramp
-// stays clear of anything flat-bottomed sitting on it - a box straddling a slope sits half-buried/
-// half-floating since it only samples height once, at its own centre.
-const DM_SLOPE1=[21,29]; // basin -> plateau ramp, in |local x| - village placement skips this band
+// elevation profile along the long axis: a flat basin down the middle and each village sitting up
+// on a flat plateau - height only depends on distance from centre (uniform across Z), like a simple
+// cross-section. There's no separate hill tier any more: the mounted MG sits on each team's own
+// bunker roof now (see buildDeathmatchMap), not on any terrain feature, so there's no gameplay need
+// for a large elevated area any more either - basin widened / plateau shrunk accordingly (overall
+// field width, DM_HALF_X, stays as-is). The ramp stays clear of anything flat-bottomed sitting on it
+// - a box straddling a slope sits half-buried/half-floating since it only samples height once, at
+// its own centre.
+const DM_SLOPE1=[34,42]; // basin -> plateau ramp, in |local x| - village placement skips this band
 function dmTerrainH(lx){
   const ax=Math.min(Math.abs(lx),DM_HALF_X);
   if(ax<DM_SLOPE1[0]) return 0;
@@ -1309,40 +1310,35 @@ function buildDeathmatchMap(){
     addBox(x1-wt-0.02,by0,z0-0.02,x1+0.02,by1,z1+0.02,tc,{collide:false});
     DM_PROPS.push({x0,x1,z0,z1,type:'bunker',team});
     addBox(x0-0.4,y0-0.3,z0-0.4,x1+0.4,y0,z1+0.4,0x6a655d);
-    addBox(x0-0.5,y1,z0-0.5,x1+0.5,y1+0.45,z1+0.5,0x7c8079);
-    return {x:bx,z:bz};
+    const roofY=y1+0.45;
+    addBox(x0-0.5,y1,z0-0.5,x1+0.5,roofY,z1+0.5,0x7c8079);
+    // bounds/roofY exposed so the MG rooftop setup below can sit precisely on THIS building - the
+    // same big team-coloured bunker shown on the map, not a separate structure next to it
+    return {x:bx,z:bz,x0,x1,z0,z1,y0,roofY,wt};
   }
-  DM_BUNKERS=[bunker(-BASE_DX,0),bunker(BASE_DX,1)];
-  // MG rooftop: the separate hill terrain tier is gone entirely (map back to a flat basin -> ramp ->
-  // plateau profile, see dmTerrainH) - the gun sits on the roof of an actual flatBuilding (the same
-  // concrete building type the village uses, just at its largest size) instead of a bespoke tower, so
-  // it reads as "the same kind of building, just bigger" rather than a random new structure. Team-
-  // colour ID band low on the walls (like the bunker), an exterior staircase, and a little sandbag
-  // cover on the roof.
+  const bk0=bunker(-BASE_DX,0),bk1=bunker(BASE_DX,1);
+  DM_BUNKERS=[bk0,bk1];
+  // MG rooftop: sits directly on top of each team's own bunker - the big blue/red-roofed building
+  // already shown on the map (drawMap colours DM_PROPS type:'bunker' by team) - instead of a
+  // separate building, bespoke or reused. Exterior staircase up the inner (basin-facing) face, a
+  // little sandbag cover around the gun; the bunker's own team-colour wall band already IDs it.
   DM_MGS=[];
   for(const side of [-1,1]){
     const team=side<0?0:1;
-    const tx=DM_OX+side*62,tz=DM_OZ,gy=dmGroundY(tx);
-    const bld=flatBuilding(tx,tz,9,8,0,'conc',gy);
-    const x0=bld.x0,x1=bld.x1,z0=bld.z0,z1=bld.z1,y0=gy,y1=bld.roofY,wt=bld.wallT;
-    const tc=BUNKER_TEAM_COL[team];
-    const by0=y0+0.3,by1=y0+0.65;   // low band, below the window sill so it doesn't cut across one
-    addBox(x0-0.02,by0,z0-0.02,x1+0.02,by1,z0+wt+0.02,tc,{collide:false});
-    addBox(x0-0.02,by0,z1-wt-0.02,x1+0.02,by1,z1+0.02,tc,{collide:false});
-    addBox(x0-0.02,by0,z0-0.02,x0+wt+0.02,by1,z1+0.02,tc,{collide:false});
-    addBox(x1-wt-0.02,by0,z0-0.02,x1+0.02,by1,z1+0.02,tc,{collide:false});
-    // exterior staircase on the INNER face (facing back toward your own bunker/the basin) - the
-    // previous version put it on the far outer face, so reaching it meant walking all the way around
-    // the building first even though you approach from the inner side every time
+    const bk=side<0?bk0:bk1;
+    const x0=bk.x0,x1=bk.x1,z0=bk.z0,z1=bk.z1,y0=bk.y0,y1=bk.roofY,tz=bk.z;
+    // exterior staircase on the INNER face (facing back toward the basin) - approached from the
+    // basin side every time, so the outer face (toward the mountain wall) would mean walking all
+    // the way around first
     const stepN=10,stepRun=0.3,stepRise=(y1-y0)/stepN,sz0=tz-1.3,sz1=tz+1.3;
     for(let i=1;i<=stepN;i++){
       const sa=side<0?x1+(i-1)*stepRun:x0-i*stepRun,sb=side<0?x1+i*stepRun:x0-(i-1)*stepRun;
       addBox(Math.min(sa,sb),y0,sz0,Math.max(sa,sb),y0+i*stepRise,sz1,0x76797a);
     }
     // gun sits near the roof's front (basin-facing) edge rather than centred - dead centre left it
-    // shielded by its own building on shots from below/ahead, so bots down in the basin essentially
-    // never had a sightline back up at it even when it was actively firing on them
-    const gx=tx-side*2.4;
+    // shielded by the bunker's own bulk on shots from below/ahead, so bots down in the basin
+    // essentially never had a sightline back up at it even while it was actively firing on them
+    const gx=bk.x-side*3;
     // a little sandbag cover on the roof around the gun, facing the basin
     sandbagRun('z',gx,tz-3,tz-1.2,1.3,y1);
     sandbagRun('z',gx,tz+1.2,tz+3,1.3,y1);
@@ -2170,6 +2166,12 @@ function dmPlaceAtSpawn(a){
   if(!a.isPlayer&&a.brain){a.brain.target=null;a.brain.path=[];a.brain.mode='none';}
 }
 function dmRespawn(a){ dmPlaceAtSpawn(a); }
+// how far back of the gun's pivot the gunner's camera sits - has to clear the seat/support post
+// (the model's rearmost parts, at local z=-0.72) with margin, or the camera ends up planted inside
+// them looking at a single mesh face point-blank ("only a flat disc visible" - that disc was
+// literally the seat). 0.45 wasn't enough; the gun body itself starts at local z=-0.35, so the old
+// offset barely cleared that and was still nose-to-nose with it.
+const MG_SEAT_OFS=1.15;
 // mounted hilltop MG (deathmatch, player or bot): F to mount/dismount. Installs the MG into whatever
 // slot was current (restored on dismount), with its own 'MG' ammo pool set to Infinity so the
 // existing mag/reload system just works unmodified - 50 rounds (WEAPONS.MG.mag) per belt, reload
@@ -2191,7 +2193,7 @@ function mountMG(p,mg){
   // time - otherwise dismounting and remounting was a free instant reload, skipping the real one
   p.slots[p.cur]={key:'MG',mag:mg.mag===undefined?WEAPONS.MG.mag:mg.mag};
   p.ammo.MG=Infinity;
-  p.pos.set(mg.x+Math.sin(mg.yaw)*0.45,mg.y,mg.z+Math.cos(mg.yaw)*0.45); p.yaw=mg.yaw; p.pitch=0; p.stance='crouch'; p.vy=0; p.onGround=true; p.reloadT=0;
+  p.pos.set(mg.x+Math.sin(mg.yaw)*MG_SEAT_OFS,mg.y,mg.z+Math.cos(mg.yaw)*MG_SEAT_OFS); p.yaw=mg.yaw; p.pitch=0; p.stance='crouch'; p.vy=0; p.onGround=true; p.reloadT=0;
   if(mg.mesh){mg.mesh.rotation.y=mg.yaw+Math.PI;mg.mesh.rotation.x=0;}
 }
 function dismountMG(p){
@@ -2787,7 +2789,7 @@ function updatePlayer(dt){
   // gun looking over it, not planted inside the model itself; the offset turns with current yaw
   // since the whole assembly (including the seat) swivels together as the gunner looks around
   if(p.mg){
-    p.pos.x=p.mg.x+Math.sin(p.yaw)*0.45;p.pos.y=p.mg.y;p.pos.z=p.mg.z+Math.cos(p.yaw)*0.45;p.vy=0;p.onGround=true;
+    p.pos.x=p.mg.x+Math.sin(p.yaw)*MG_SEAT_OFS;p.pos.y=p.mg.y;p.pos.z=p.mg.z+Math.cos(p.yaw)*MG_SEAT_OFS;p.vy=0;p.onGround=true;
     if(p.mg.mesh){p.mg.mesh.rotation.y=p.yaw+Math.PI;p.mg.mesh.rotation.x=-p.pitch;}
   }
   if(!p.mg){
@@ -3122,7 +3124,7 @@ function updateBot(b,dt){
   if(b.inWater)speed*=0.5;
   moveActor(b,mx*speed,mz*speed,dt);
   if(b.mg){
-    b.pos.x=b.mg.x+Math.sin(b.yaw)*0.45;b.pos.y=b.mg.y;b.pos.z=b.mg.z+Math.cos(b.yaw)*0.45;b.vy=0;b.onGround=true;
+    b.pos.x=b.mg.x+Math.sin(b.yaw)*MG_SEAT_OFS;b.pos.y=b.mg.y;b.pos.z=b.mg.z+Math.cos(b.yaw)*MG_SEAT_OFS;b.vy=0;b.onGround=true;
     if(b.mg.mesh){b.mg.mesh.rotation.y=b.yaw+Math.PI;b.mg.mesh.rotation.x=-b.pitch;}
   }
   // stuck/anti-jam recovery now also runs while fighting (not just while following a path) - a bot

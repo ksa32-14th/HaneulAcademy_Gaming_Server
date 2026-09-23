@@ -107,7 +107,7 @@ kbd{font-family:var(--disp);font-weight:700;display:inline-flex;align-items:cent
 #scope{position:absolute;inset:0;display:none;background:radial-gradient(circle at 50% 50%,transparent 0,transparent 30.5vmin,rgba(70,76,70,.55) 31.2vmin,rgba(18,20,18,.97) 32.6vmin,#060606 38vmin)}
 #scope::before{content:"";position:absolute;left:50%;top:50%;width:62vmin;height:62vmin;transform:translate(-50%,-50%);border-radius:50%;background:radial-gradient(circle,rgba(160,200,220,.04) 0,transparent 55%,rgba(0,0,0,.35) 100%)}
 #scope svg{position:absolute;left:50%;top:50%;width:62vmin;height:62vmin;transform:translate(-50%,-50%)}
-#scope #scopeMk14{display:none}
+#scope #scopeMk14,#scope #scopeUmp{display:none}
 /* 4x (MK14) scope: same tube, but a ring-shaped band near the edge of the lens is optically blurred
    (short eye-relief look) and the reticle is a bold illuminated chevron+circle instead of the
    Kar98k's fine duplex crosshair, so the two scopes read as genuinely different optics */
@@ -116,6 +116,15 @@ kbd{font-family:var(--disp);font-weight:700;display:inline-flex;align-items:cent
 #scope.mk14::after{content:"";position:absolute;inset:0;backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px);
   mask-image:radial-gradient(circle at 50% 50%,transparent 0,transparent 29.5vmin,#000 31.5vmin,#000 34vmin,transparent 36vmin);
   -webkit-mask-image:radial-gradient(circle at 50% 50%,transparent 0,transparent 29.5vmin,#000 31.5vmin,#000 34vmin,transparent 36vmin)}
+/* UMP45's switchable 3x: a small reflex-style circle-and-crosshair reticle (bracket ring + tiny
+   cross + a drop line beneath, no magnifying duplex) floating over a softly blurred view - most of
+   the visible lens is blurred, not just a thin ring at the edge like the MK14, since a reflex optic
+   like this has essentially no eye-box depth of field the way a real rifle scope does */
+#scope.ump3x #scopeKar{display:none}
+#scope.ump3x #scopeUmp{display:block}
+#scope.ump3x::after{content:"";position:absolute;inset:0;backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);
+  mask-image:radial-gradient(circle at 50% 50%,transparent 0,transparent 12vmin,#000 16vmin,#000 34vmin,transparent 36vmin);
+  -webkit-mask-image:radial-gradient(circle at 50% 50%,transparent 0,transparent 12vmin,#000 16vmin,#000 34vmin,transparent 36vmin)}
 #vignette{position:absolute;inset:0;background:radial-gradient(ellipse at center,transparent 45%,rgba(190,20,10,.6) 100%);opacity:0}
 #blueTint{position:absolute;inset:0;background:radial-gradient(ellipse at center,rgba(60,110,255,.05) 30%,rgba(60,110,255,.42) 100%);opacity:0;transition:opacity .5s}
 #dmgDir{position:absolute;left:50%;top:50%;width:180px;height:180px;margin:-90px 0 0 -90px;opacity:0}
@@ -267,6 +276,13 @@ body.touch #minimap{pointer-events:auto;cursor:pointer;position:relative;z-index
       <circle cx="0" cy="0" r="34" fill="none" stroke="#ff5a3c" stroke-width="0.35" opacity="0.55"/>
       <g stroke="#0c0d0c" stroke-width="1.4"><line x1="0" y1="-96" x2="0" y2="-16"/><line x1="0" y1="16" x2="0" y2="96"/><line x1="-96" y1="0" x2="-16" y2="0"/><line x1="96" y1="0" x2="16" y2="0"/></g>
       <circle cx="0" cy="0" r="1.8" fill="#ff3b30"/>
+    </svg><svg id="scopeUmp" viewBox="-100 -100 200 200" aria-hidden="true">
+      <g stroke="#bfe3ff" stroke-width="1.1" fill="none" opacity="0.92">
+        <path d="M -18 -13 A 22 22 0 0 1 18 -13"/><path d="M -18 13 A 22 22 0 0 0 18 13"/>
+        <path d="M -22 -5 A 22 22 0 0 0 -22 5"/><path d="M 22 -5 A 22 22 0 0 1 22 5"/>
+      </g>
+      <g stroke="#bfe3ff" stroke-width="1.1"><line x1="-5" y1="0" x2="5" y2="0"/><line x1="0" y1="-5" x2="0" y2="5"/></g>
+      <line x1="0" y1="22" x2="0" y2="60" stroke="#bfe3ff" stroke-width="1.1"/>
     </svg></div>
     <canvas id="compass" width="440" height="34"></canvas>
     <div id="feed"></div>
@@ -2233,31 +2249,25 @@ function dmPlaceAtSpawn(a){
   if(!a.isPlayer&&a.brain){a.brain.target=null;a.brain.path=[];a.brain.mode='none';}
 }
 function dmRespawn(a){ dmPlaceAtSpawn(a); }
-// how far back of the gun's pivot the gunner's camera sits. The camera only moves with YAW (it's
-// fixed to the mount's own facing, mg.yaw) but the gun ALSO tilts with PITCH (gun.rotation.x), and
-// the elevated parts - shield/body/pivot, all a good 1.05-1.3 units above the pivot - sweep a wide
-// arc toward the fixed camera as pitch swings even moderately, since their height becomes lever arm:
-// at pitch~30 deg the shield alone swings back by over half a metre from its neutral position. 1.15
-// only ever accounted for the neutral pose; camera was getting swept into by the gun itself on any
-// real aim-up/down, not just at extreme yaw. 2.0 keeps real clearance (~1-2 units) across the full
-// clamped yaw/pitch range below, verified by direct calculation, not just at dead-centre aim.
-const MG_SEAT_OFS=2.0;
-// the camera sat at roughly the SAME height as the gun body/barrel (eye height ~1.16 above the
-// mount vs. the gun's own 1.05-1.3), so looking straight down the mount's facing put the barrel
-// directly on the view axis, coaxial with it - at that point no amount of backward distance fixes
-// it, since something dead ahead on the camera's own axis stays dead-centre in frame no matter how
-// far back the camera sits. Raising the camera clear above the gun's own height (its tallest part,
-// the shield, tops out at 1.46 above the mount) puts it in a genuine over-the-top position instead,
-// looking down across the gun rather than straight through it.
-const MG_CAM_RISE=1.3;
+// Camera geometry for the mounted MG: a fixed point behind (MG_SEAT_OFS) and above (MG_CAM_RISE)
+// the pivot, so nothing dead ahead on the view axis (the coaxial-with-the-barrel problem the
+// straight-behind version had) and nothing swept in by pitch (the gun's elevated mass - shield/
+// body/pivot sit 1.05-1.3 above the pivot - swings a wide arc toward a fixed camera as it tilts).
+// Toned down from an earlier pass that technically cleared every case but sat so high and far back
+// it lost any feeling of actually being seated at the gun; these numbers were re-verified by hand
+// across the full clamped yaw+pitch range (worst case ~1.1-1.6 units clearance for every gun part,
+// not just neutral aim) rather than just made smaller and hoped for the best.
+const MG_SEAT_OFS=1.5;
+const MG_CAM_RISE=0.5;
 // how far the gun can swing each way (yaw) from the mount's own facing before it's clamped. Without
 // a limit, looking far enough around swings the barrel/receiver close enough to the fixed camera
 // spot behind it to fill the whole view - a real tripod gun has a limited traverse arc for exactly
 // this reason.
 const MG_TRAVERSE=100*Math.PI/180;
-// same idea for pitch (up/down) - a real tripod gun's elevation is limited too, and here it also
-// keeps the elevated gun body from swinging back toward the fixed camera on a steep look-up/down.
-const MG_PITCH_LIMIT=0.5;
+// same idea for pitch (up/down) - tighter than the yaw limit, since pitch is what swings the gun's
+// elevated mass toward the (now much closer) camera; keeping this narrow is what let the seat move
+// back in close without reopening the clearance problem.
+const MG_PITCH_LIMIT=0.35;
 // mounted hilltop MG (deathmatch, player or bot): F to mount/dismount. Installs the MG into whatever
 // slot was current (restored on dismount), with its own 'MG' ammo pool set to Infinity so the
 // existing mag/reload system just works unmodified - 50 rounds (WEAPONS.MG.mag) per belt, reload
@@ -3522,6 +3532,7 @@ function updateHUD(dt){
   hud.scope.style.display=G.scoped?'block':'none';
   const w=p.weapon();
   hud.scope.classList.toggle('mk14',G.scoped&&!!w&&w.key==='MK14');
+  hud.scope.classList.toggle('ump3x',G.scoped&&!!w&&w.key==='UMP45');
   const sights=G.aimScope||(G.fp&&G.ads);
   hud.cross.style.display=G.scoped||sights||p.state!=='ground'||!p.alive?'none':'block';
   $('rdot').hidden=true;

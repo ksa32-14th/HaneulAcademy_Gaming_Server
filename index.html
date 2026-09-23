@@ -71,6 +71,13 @@ kbd{font-family:var(--disp);font-weight:700;display:inline-flex;align-items:cent
 #bigMsg{position:absolute;left:50%;top:21%;transform:translateX(-50%);font-family:var(--disp);font-weight:700;font-size:21px;letter-spacing:.04em;text-shadow:0 2px 8px rgba(0,0,0,.7);transition:opacity .4s;white-space:nowrap}
 #bigMsg.blue{color:#a9c6ff}
 #bigMsg.amber{color:var(--amber)}
+/* deathmatch kill confirmation: your running kill count, big and red, center-but-below-center
+   (not up with the other banners), with who-killed-whom-with-what underneath it */
+#killMsg{position:absolute;left:50%;top:58%;transform:translate(-50%,-50%);text-align:center;opacity:0;transition:opacity .4s;pointer-events:none}
+#killCount{font-family:var(--disp);font-weight:700;font-size:34px;letter-spacing:.04em;color:var(--red);text-shadow:0 2px 10px rgba(0,0,0,.75)}
+#killDetail{margin-top:4px;font-size:14px;font-weight:600;text-shadow:0 2px 6px rgba(0,0,0,.8)}
+#killDetail em{font-style:normal;color:var(--muted);font-family:var(--disp);font-size:12px;margin:0 7px}
+#killDetail .hs{color:var(--red);font-family:var(--disp);font-size:11px;margin-left:6px}
 
 #bottomC{position:absolute;bottom:22px;left:50%;transform:translateX(-50%);width:min(360px,52vw);display:flex;flex-direction:column;gap:7px;align-items:center}
 #gear{display:flex;gap:6px}
@@ -173,30 +180,30 @@ button.go.small{padding:9px 18px;font-size:13px;letter-spacing:.08em}
    and the minimap itself opens the full map (no separate map button). */
 #touchCtl{position:absolute;inset:0}
 #tLook{position:absolute;inset:0;pointer-events:auto;touch-action:none}
-#tStick{position:absolute;left:20px;bottom:20px;width:132px;height:132px;border-radius:50%;background:rgba(236,239,230,.08);border:1px solid var(--line);pointer-events:auto;touch-action:none}
+#tStick{position:absolute;left:34px;bottom:34px;width:132px;height:132px;border-radius:50%;background:rgba(236,239,230,.08);border:1px solid var(--line);pointer-events:auto;touch-action:none}
 #tStickNub{position:absolute;left:50%;top:50%;width:56px;height:56px;margin:-28px 0 0 -28px;border-radius:50%;background:rgba(242,179,61,.5);border:1px solid rgba(242,179,61,.8);transition:transform .05s linear}
 #tStickNub.sprint{background:rgba(255,140,61,.75);border-color:rgba(255,170,61,.95)}
 .tbtn{pointer-events:auto;touch-action:none;-webkit-user-select:none;user-select:none;font-family:var(--disp);font-weight:700;font-size:11.5px;letter-spacing:.02em;width:54px;height:54px;border-radius:50%;background:rgba(10,15,19,.55);border:1px solid var(--line);color:var(--text);display:flex;align-items:center;justify-content:center;text-align:center;line-height:1.1;-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);position:absolute}
 .tbtn:active{background:rgba(242,179,61,.35);border-color:rgba(242,179,61,.7)}
-#tFire{width:88px;height:88px;font-size:14px;background:rgba(255,75,62,.26);border-color:rgba(255,75,62,.6);right:16px;bottom:16px}
+#tFire{width:88px;height:88px;font-size:14px;background:rgba(255,75,62,.26);border-color:rgba(255,75,62,.6);right:30px;bottom:30px}
 #tFire:active{background:rgba(255,75,62,.5)}
-#tPause{width:40px;height:40px;font-size:15px;top:240px;right:14px}
+#tPause{width:40px;height:40px;font-size:15px;top:240px;right:24px}
 /* left thumb cluster */
-#tFire2{width:52px;height:52px;font-size:12px;top:14px;left:14px;background:rgba(255,75,62,.2);border-color:rgba(255,75,62,.55)}
+#tFire2{width:52px;height:52px;font-size:12px;top:20px;left:20px;background:rgba(255,75,62,.2);border-color:rgba(255,75,62,.55)}
 #tFire2:active{background:rgba(255,75,62,.45)}
-#tLean{position:absolute;left:20px;bottom:180px;width:132px;display:flex;justify-content:space-between}
+#tLean{position:absolute;left:34px;bottom:194px;width:132px;display:flex;justify-content:space-between}
 #tLean .tbtn{position:static;width:56px;height:40px;border-radius:10px;font-size:16px}
-#tLeftAux{position:absolute;left:166px;bottom:20px;display:flex;flex-direction:column;gap:10px}
+#tLeftAux{position:absolute;left:180px;bottom:34px;display:flex;flex-direction:column;gap:10px}
 #tLeftAux .tbtn{position:static;width:52px;height:52px;font-size:10.5px}
 /* right thumb cluster: fire anchored bottom-right; scope/jump/crouch stack directly left of it
    (scope above jump above crouch) with prone and reload one column further out */
 #tButtons{position:absolute;inset:0;pointer-events:none}
 #tButtons .tbtn{pointer-events:auto}
-#tScope{width:52px;height:52px;right:114px;bottom:158px;font-size:10.5px}
-#tJump{width:52px;height:52px;right:114px;bottom:96px;font-size:11px}
-#tCrouch{width:52px;height:52px;right:114px;bottom:34px;font-size:10px}
-#tProne{width:50px;height:50px;right:176px;bottom:96px;font-size:10px}
-#tReload{width:50px;height:50px;right:176px;bottom:34px;font-size:10.5px}
+#tScope{width:52px;height:52px;right:128px;bottom:172px;font-size:10.5px}
+#tJump{width:52px;height:52px;right:128px;bottom:110px;font-size:11px}
+#tCrouch{width:52px;height:52px;right:128px;bottom:48px;font-size:10px}
+#tProne{width:50px;height:50px;right:190px;bottom:110px;font-size:10px}
+#tReload{width:50px;height:50px;right:190px;bottom:48px;font-size:10.5px}
 #tPause,#tFire2{position:absolute}
 /* deathmatch: M opens the map on the left half and a weapon-swap panel on the right half */
 body.dmSplit #bigmap{left:27vw}
@@ -207,8 +214,8 @@ body.dmSplit #bigmap{left:27vw}
 #dmWeap .invList button.sel{background:rgba(242,179,61,.2);border-color:rgba(242,179,61,.75)}
 /* the joystick/lean sit where #meds normally does, and weapons move up above the HP bar, clear of
    both the left stick cluster and the right scope/jump/crouch column */
-body.touch #meds{bottom:236px}
-body.touch #weapons{position:absolute;left:50%;right:auto;bottom:70px;transform:translateX(-50%);flex-direction:row;gap:8px;max-width:min(280px,38vw)}
+body.touch #meds{bottom:250px}
+body.touch #weapons{position:absolute;left:50%;right:auto;bottom:84px;transform:translateX(-50%);flex-direction:row;gap:6px;max-width:min(230px,30vw);pointer-events:auto}
 body.touch .wslot{min-width:0;padding:4px 10px}
 body.touch .wslot .nm{font-size:12px}
 body.touch #minimap{pointer-events:auto;cursor:pointer}
@@ -253,6 +260,7 @@ body.touch #minimap{pointer-events:auto;cursor:pointer}
     <div id="prompt" class="panel" hidden></div>
     <div id="progress" hidden><div id="progLabel"></div><div class="bar"><i id="progFill"></i></div></div>
     <div id="bigMsg"></div>
+    <div id="killMsg"><div id="killCount"></div><div id="killDetail"></div></div>
     <div id="meds">
       <div class="med panel"><kbd>4</kbd>붕대<b id="bandN">0</b></div>
       <div class="med panel"><kbd>5</kbd>구급상자<b id="medN">0</b></div>
@@ -456,7 +464,7 @@ function P(g,c,x,y,z,rx){const m=M(g,c,x,y,z);if(rx)m.rotation.x=rx;return m;}
 // 5:3 rectangle, long axis along X - each team spawns from a bunker on a short (Z) edge and fights
 // down the long lane. Much smaller than the old 420x420 square so AR/DMR fights actually happen
 // instead of everyone wandering for a minute before finding anyone.
-const DM_OX=6000,DM_OZ=0,DM_HALF_X=100,DM_HALF_Z=60,DM_GROUND=0;
+const DM_OX=6000,DM_OZ=0,DM_HALF_X=80,DM_HALF_Z=48,DM_GROUND=0;
 function inDM(x,z){return Math.abs(x-DM_OX)<DM_HALF_X&&Math.abs(z-DM_OZ)<DM_HALF_Z;}
 // ---------- terrain
 const ISLAND_R=285;
@@ -1076,11 +1084,40 @@ function sandbagRun(axis,fixed,a0,a1,h){
   const d=0.42;
   DM_PROPS.push(axis==='x'?{x0:Math.min(a0,a1),x1:Math.max(a0,a1),z0:fixed-d,z1:fixed+d,type:'sandbag'}:{x0:fixed-d,x1:fixed+d,z0:Math.min(a0,a1),z1:Math.max(a0,a1),type:'sandbag'});
 }
+// HESCO-style barrier: one tall, solid, monolithic block (not lumpy like sandbagRun) - the "big"
+// wall type, chest-to-head high and NOT vaultable, for places that should really break sightlines
+// rather than just offer crouch cover
+const HESCO_COLS=[0x9f9376,0x8f8469,0xa89b7c];
+function bigWall(axis,fixed,a0,a1,h){
+  h=h||2.1; if(Math.abs(a1-a0)<0.4) return;
+  const d=0.5,col=HESCO_COLS[Math.floor(srand()*HESCO_COLS.length)];
+  if(axis==='x') addBox(Math.min(a0,a1),DM_GROUND,fixed-d,Math.max(a0,a1),DM_GROUND+h,fixed+d,col);
+  else addBox(fixed-d,DM_GROUND,Math.min(a0,a1),fixed+d,DM_GROUND+h,Math.max(a0,a1),col);
+  DM_PROPS.push(axis==='x'?{x0:Math.min(a0,a1),x1:Math.max(a0,a1),z0:fixed-d,z1:fixed+d,type:'sandbag'}:{x0:fixed-d,x1:fixed+d,z0:Math.min(a0,a1),z1:Math.max(a0,a1),type:'sandbag'});
+}
+// a plain, flat-roofed single-story box building in either mudbrick or bare concrete, with one
+// door gap - deliberately simpler than the shared building() helper (no gable roof at all, and a
+// fully custom palette) so deathmatch never gets the peaked-roof "village house" look
+const MUD_COLS=[0xc9a876,0xb8916a,0xceb488,0xa8875f,0xbfa070,0xd4b98c];
+const CONC_COLS=[0x8a8d86,0x7c8079,0x9a9d94,0x6f736c,0x878a82,0x757971];
+function flatBuilding(cx,cz,w,d,rot,style){
+  const h=sr(2.6,3.3),hw=w/2,hd=d/2,wt=0.3,doorW=1.3;
+  const pal=style==='mud'?MUD_COLS:CONC_COLS,col=pal[Math.floor(srand()*pal.length)];
+  const roofCol=style==='mud'?0x8a6f4a:0x4a4d47;
+  const e=emitter(cx,cz,rot);
+  e.box(-hw,0,-hd,hw,h,-hd+wt,col);
+  e.box(-hw,0,hd-wt,-doorW/2,h,hd,col);e.box(doorW/2,0,hd-wt,hw,h,hd,col);
+  e.box(-hw,0,-hd,-hw+wt,h,hd,col);e.box(hw-wt,0,-hd,hw,h,hd,col);
+  e.box(-hw-0.3,h,-hd-0.3,hw+0.3,h+0.22,hd+0.3,roofCol);
+  const c1=e.pt(-hw,-hd),c2=e.pt(hw,hd);
+  BLD.push({x0:Math.min(c1.x,c2.x),x1:Math.max(c1.x,c2.x),z0:Math.min(c1.z,c2.z),z1:Math.max(c1.z,c2.z),base:DM_GROUND,floors:1,fh:h,
+    doorOut:e.pt(0,hd+1.3),doorIn:e.pt(0,hd-0.8),stairs:null,gate:null});
+}
 function buildDeathmatchMap(){
-  const savedWall=WALL_COLS.slice(),savedRoof=ROOF_COLS.slice(),savedLootLen=LOOT_SPOTS.length,bldFrom=BLD.length;
-  // gray, weathered concrete/cinderblock - Sanhok "Camp Alpha" rather than a tidy mudbrick village
-  WALL_COLS.length=0;WALL_COLS.push(0x8a8d86,0x7c8079,0x9a9d94,0x6f736c,0x878a82,0x757971);
-  ROOF_COLS.length=0;ROOF_COLS.push(0x4a4d47,0x3f423c,0x53564f,0x363832);
+  // (unlike the old version, DM never touches the shared building()/WALL_COLS/LOOT_SPOTS at all
+  // any more - flatBuilding() has its own palette and never queues loot, so there's nothing to
+  // save and restore here)
+  const bldFrom=BLD.length;
 
   // flat dirt ground
   {
@@ -1108,35 +1145,42 @@ function buildDeathmatchMap(){
     for(let z=-Lz+step;z<Lz-1e-6;z+=step){put(DM_OX-Lx,DM_OZ+z);put(DM_OX+Lx,DM_OZ+z);}
   }
 
-  // village: dense, shabby combat-outpost clutter - flat-roofed concrete sheds/warehouses, rusted
-  // shipping containers and stacked sandbag firing walls, packed close together (not a tidy town)
-  // so every lane is close-quarters cover-to-cover fighting, "The Outpost"-style.
-  const BASE_DX=DM_HALF_X-12; // local x offset of each team's base from arena centre
-  for(const rz of [-46,-24,0,24,46]){
-    let x=-58;
-    while(x<58){
+  // village: dense, shabby combat-outpost clutter - flat-roofed mudbrick AND bare-concrete boxes,
+  // rusted shipping containers and stacked sandbag firing walls, packed tightly (not a tidy town,
+  // and never a gable roof in sight) so every lane is close-quarters cover-to-cover fighting,
+  // "The Outpost"-style.
+  const BASE_DX=DM_HALF_X-21; // local x offset of each team's base from arena centre
+  for(const rz of [-32,-16,0,16,32]){
+    let x=-40;
+    while(x<40){
       const roll=srand();
-      if(roll<0.44){
-        const w=Math.round(sr(5,9)),d=Math.round(sr(5,7)),rot=Math.floor(srand()*4);
-        building(srand()<0.5?'warehouse':'shed',DM_OX+x+sr(-2,2),DM_OZ+rz+sr(-3,3),w,d,DM_GROUND,rot,0);
-      } else if(roll<0.68){
+      if(roll<0.42){
+        const w=Math.round(sr(5,8)),d=Math.round(sr(5,7)),rot=Math.floor(srand()*4);
+        flatBuilding(DM_OX+x+sr(-2,2),DM_OZ+rz+sr(-2,2),w,d,rot,srand()<0.5?'mud':'conc');
+      } else if(roll<0.64){
         container(DM_OX+x+sr(-1.5,1.5),DM_OZ+rz+sr(-2,2),Math.floor(srand()*2));
       } else if(roll<0.9){
-        const len=sr(3.5,6);
+        const len=sr(3,5.5);
         if(srand()<0.5) sandbagRun('x',DM_OZ+rz+sr(-2,2),DM_OX+x-len/2,DM_OX+x+len/2);
         else sandbagRun('z',DM_OX+x+sr(-2,2),DM_OZ+rz-len/2,DM_OZ+rz+len/2);
       }
-      x+=sr(8,12);
+      x+=sr(6,9);
     }
   }
   // sandbag firing line facing into the village just outside each team's bunker - the last line of
   // defense before your own spawn, mirroring a real outpost's perimeter
   for(const side of [-1,1]){
-    const bx=DM_OX+side*(BASE_DX-4);
-    sandbagRun('z',bx,DM_OZ-18,DM_OZ-6);
-    sandbagRun('z',bx,DM_OZ+6,DM_OZ+18);
+    const bx=DM_OX+side*(BASE_DX-16);
+    sandbagRun('z',bx,DM_OZ-16,DM_OZ-5);
+    sandbagRun('z',bx,DM_OZ+5,DM_OZ+16);
   }
-  LOOT_SPOTS.length=savedLootLen;   // deathmatch has no loot - discard the spawn points building() just queued
+  // a broken line of cover roughly down the middle of the arena, mixing tall HESCO-style barriers
+  // with sandbag runs, so the map *reads* as split into two halves - several gaps left to cross
+  // through, not one continuous wall sealing the whole boundary
+  for(const[z0,z1,kind]of[[-34,-24,'hesco'],[-16,-5,'sand'],[5,16,'sand'],[24,34,'hesco']]){
+    const xj=DM_OX+sr(-2,2);
+    if(kind==='hesco') bigWall('z',xj,z0,z1); else sandbagRun('z',xj,z0,z1);
+  }
   for(let i=bldFrom;i<BLD.length;i++){const b=BLD[i];DM_PROPS.push({x0:b.x0,x1:b.x1,z0:b.z0,z1:b.z1,type:'building'});}
 
   // two sealed, windowless respawn bunkers (one per team) - there is no door, so nobody ever
@@ -1152,14 +1196,11 @@ function buildDeathmatchMap(){
     return {x:bx,z:bz};
   }
   DM_BUNKERS=[bunker(-BASE_DX),bunker(BASE_DX)];
-  const frontSpawns=(localX,face)=>{const pts=[];for(let i=0;i<8;i++)pts.push({x:DM_OX+localX+face*sr(10,20),z:DM_OZ+sr(-20,20)});return pts;};
+  const frontSpawns=(localX,face)=>{const pts=[];for(let i=0;i<8;i++)pts.push({x:DM_OX+localX+face*sr(8,14),z:DM_OZ+sr(-18,18)});return pts;};
   DM_SPAWN=[
     {team:0,base:DM_BUNKERS[0],front:frontSpawns(-BASE_DX,1)},
     {team:1,base:DM_BUNKERS[1],front:frontSpawns(BASE_DX,-1)},
   ];
-
-  WALL_COLS.length=0;WALL_COLS.push(...savedWall);
-  ROOF_COLS.length=0;ROOF_COLS.push(...savedRoof);
 }
 // the BR world's walls/roofs are batched into InstancedMeshes once, right after BR world-gen
 // finishes (see the colorInst() calls above) - anything addBox()/building() adds after that point
@@ -1437,7 +1478,7 @@ function makeChar(shirt,pants,skin,hair){
 
 // ---------- actors
 const BOTS=49; // + the player = 50
-const NAMES=['Viper','달빛사냥꾼','GhostK','Tiger_77','불곰','Ranger','NovaX','Frost','HawkEye','치킨러버','Ace','Blitz','Raven','LoneWolf','조용한저격수','Echo','Storm','사막여우','Titan','Phantom','Maverick','Bolt','Rex','밤까마귀','Sparrow','Kilo','산들바람'];
+const NAMES=['Viper','MoonHunter','GhostK','Tiger_77','BrownBear','Ranger','NovaX','Frost','HawkEye','ChickenLover','Ace','Blitz','Raven','LoneWolf','SilentSniper','Echo','Storm','DesertFox','Titan','Phantom','Maverick','Bolt','Rex','NightCrow','Sparrow','Kilo','Breeze'];
 const SHIRTS=[0x9b3b35,0x2f5d8a,0x6d7d3a,0x8a6b3d,0x444a52,0x7b4a8a,0x2d7a6e,0xb0752e,0x5a5a5a,0x873a5b,0xd8d2c2];
 let actors=[], player=null, plane=null;
 const G={state:'menu',paused:false,time:0,ads:false,scoped:false,fp:true,scopeToggle:false,lookX:0,lookY:0,noLock:false,locked:false,everLocked:false,dmgDealt:0,bigmap:false,deathCause:'',hurt:0,dm:false,
@@ -1800,6 +1841,7 @@ function tryFire(a,dir,origin){
 }
 function damage(v,amount,attacker,head,wname){
   if(!v.alive) return;
+  if(G.dm&&attacker&&attacker!==v&&attacker.team===v.team) return;   // deathmatch: no friendly fire
   // client: never mutate hp locally (the host doesn't know this shot happened yet, and isn't
   // authoritative for it either way) — forward the claim and let the next state snapshot apply the
   // real result. Puff/hitmarker were already shown by the caller before hp math, so this still feels
@@ -1857,7 +1899,7 @@ function dmKill(v,k,wname,head){
   }
   feed(k,v,wname,head);
   DM.feedQ.push({kid:k?k.id:null,vid:v.id,w:wname,head:!!head});
-  if(k&&k.isPlayer){bigMsg(`${v.name} 처치`,'amber',1.8);blip(1200,0.09,0.05,'triangle');}
+  if(k&&k.isPlayer){killMsg(k,v,wname,head);blip(1200,0.09,0.05,'triangle');}
   else if(v.isPlayer) bigMsg('사망 · 곧 리스폰',null,1.6);
   if(G.net.mode==='host') dmCheckWin();
 }
@@ -2181,15 +2223,17 @@ function tUp(el,fn){ el.addEventListener('pointerup',e=>{ e.preventDefault(); fn
   });
   tUp(stick,e=>{ if(e.pointerId!==stickId)return; stickId=null; resetStick(); });
 })();
-(function(){
-  const look=$('tLook');
-  let lookId=null,lastX=0,lastY=0;
-  tDown(look,e=>{
-    if(lookId!==null)return;
-    lookId=e.pointerId; look.setPointerCapture(lookId); lastX=e.clientX; lastY=e.clientY;
+// shared by the full-screen look layer AND the fire buttons - without this, the finger holding
+// fire down was captured entirely by that button and couldn't also drag to pull recoil down, since
+// pointermove only reaches whichever element captured that pointerId
+function wireDragLook(el){
+  let id=null,lastX=0,lastY=0;
+  el.addEventListener('pointerdown',e=>{
+    if(id!==null)return;
+    e.preventDefault(); id=e.pointerId; try{el.setPointerCapture(id);}catch(err){} lastX=e.clientX; lastY=e.clientY;
   });
-  look.addEventListener('pointermove',e=>{
-    if(e.pointerId!==lookId)return;
+  el.addEventListener('pointermove',e=>{
+    if(e.pointerId!==id)return;
     e.preventDefault();
     const dx=e.clientX-lastX,dy=e.clientY-lastY; lastX=e.clientX; lastY=e.clientY;
     if(G.state!=='play'||G.paused||G.invOpen||!player||!player.alive) return;
@@ -2197,8 +2241,12 @@ function tUp(el,fn){ el.addEventListener('pointerup',e=>{ e.preventDefault(); fn
     const s=0.0022*G.sens.main*(aiming?G.sens.aim:1)/(G.scoped?4:aiming?1.6:1);
     G.lookX-=dx*s;G.lookY-=dy*s;
   });
-  tUp(look,e=>{ if(e.pointerId!==lookId)return; lookId=null; });
-})();
+  const clear=e=>{ if(e.pointerId===id) id=null; };
+  el.addEventListener('pointerup',clear); el.addEventListener('pointercancel',clear);
+}
+wireDragLook($('tLook'));
+wireDragLook($('tFire'));
+wireDragLook($('tFire2'));
 tDown($('tFire'),()=>{ if(!AC)initAudio(); if(AC&&AC.state!=='running')AC.resume(); mouse.left=true;mouse.clicked=true; });
 tUp($('tFire'),()=>{ mouse.left=false; });
 tDown($('tFire2'),()=>{ if(!AC)initAudio(); if(AC&&AC.state!=='running')AC.resume(); mouse.left=true;mouse.clicked=true; });
@@ -2212,6 +2260,12 @@ tUp($('tInteract'),()=>releaseKey('KeyF'));
 tDown($('minimap'),()=>tapKey('KeyM'));
 tUp($('minimap'),()=>releaseKey('KeyM'));
 tDown($('tBag'),()=>{ if(G.invOpen)closeInv(true); else openInv(); });
+// tapping a weapon slot switches to it, same as pressing 1/2/3 on a keyboard
+tDown($('weapons'),e=>{
+  const el=e.target.closest('.wslot'); if(!el||!player) return;
+  switchTo(player,+el.dataset.slot);
+  if(G.net.mode==='client')clientSendInput();
+});
 tDown($('tJump'),()=>tapKey('Space'));
 tUp($('tJump'),()=>releaseKey('Space'));
 tDown($('tLeanL'),()=>tapKey('KeyQ'));
@@ -2514,7 +2568,7 @@ function dmBotWander(b){
   if(B.mode==='dm'&&B.path.length) return;
   // push all the way across to the enemy's side (not just to the middle) so the two teams
   // actually cross paths instead of drifting in a shared no-man's-land that nobody quite reaches
-  const side=b.team===0?1:-1,mid=DM_OX+side*rnd(15,92),z=DM_OZ+rnd(-50,50);
+  const side=b.team===0?1:-1,mid=DM_OX+side*rnd(12,66),z=DM_OZ+rnd(-40,40);
   setGoal(b,mid,z,'dm');
   B.urgent=true;   // sprint speed while closing distance - this is a TDM, not a stealth crawl
 }
@@ -2763,6 +2817,14 @@ function setText(el,key,v){if(cache[key]!==v){cache[key]=v;el.textContent=v;}}
 function setHTML(el,key,v){if(cache[key]!==v){cache[key]=v;el.innerHTML=v;}}
 let msgT=0;
 function bigMsg(t,cls,dur){const e=$('bigMsg');e.textContent=t;e.className=cls||'';e.style.opacity=1;msgT=dur||2.5;}
+let killMsgT=0;
+// deathmatch kill confirmation: your new kill count in red, center-below-center, with who killed
+// whom and with what underneath - separate from bigMsg so it doesn't collide with zone/respawn text
+function killMsg(k,v,w,head){
+  $('killCount').textContent=`${k.kills} 킬`;
+  $('killDetail').innerHTML=`${esc(k.name)} <em>${esc(w)}</em> ${esc(v.name)}${head?' <span class="hs">HS</span>':''}`;
+  $('killMsg').style.opacity=1;killMsgT=2.2;
+}
 let hitT=0;
 function hitMarker(head){const e=$('hitmark');e.className=head?'head':'';e.style.opacity=1;hitT=0.18;if(AC){const b=spatial(null,0);nz(AC.currentTime,b,{type:'lowpass',f:head?1400:700,dur:0.05,vol:0.25});if(head)tone(AC.currentTime,b,{type:'triangle',f:1800,f2:1500,dur:0.08,vol:0.06});}}
 let dmgDirT=0;
@@ -2781,6 +2843,7 @@ function feed(k,v,w,head){
 function updateHUD(dt){
   const p=player;
   msgT-=dt;if(msgT<=0)$('bigMsg').style.opacity=0;
+  killMsgT-=dt;if(killMsgT<=0)$('killMsg').style.opacity=0;
   hitT-=dt;if(hitT<=0)$('hitmark').style.opacity=0;
   dmgDirT-=dt;$('dmgDir').style.opacity=Math.max(0,Math.min(1,dmgDirT));
   G.hurt=Math.max(0,G.hurt-dt*0.8);
@@ -2812,7 +2875,7 @@ function updateHUD(dt){
   for(let s=0;s<3;s++){
     const w=p.slots[s];if(!w)continue;
     const d=WEAPONS[w.key];
-    wh+=`<div class="wslot panel${s===p.cur?' act':''}"><span class="n">${s+1}</span><span class="nm">${d.name}</span><span class="am"><b class="${w.mag===0?'empty':''}">${w.mag}</b> / ${p.ammo[d.ammo]}</span></div>`;
+    wh+=`<div class="wslot panel${s===p.cur?' act':''}" data-slot="${s}"><span class="n">${s+1}</span><span class="nm">${d.name}</span><span class="am"><b class="${w.mag===0?'empty':''}">${w.mag}</b> / ${p.ammo[d.ammo]}</span></div>`;
   }
   setHTML(hud.weap,'weap',wh);
   let pr='';
@@ -3673,7 +3736,7 @@ function clientApplyState(msg){
   if(msg.take) for(const id of msg.take){const it=loot.find(l=>l.id===id);if(it){scene.remove(it.mesh);loot.splice(loot.indexOf(it),1);}}
   if(msg.drop) for(const d of msg.drop){if(!loot.find(l=>l.id===d.id))spawnLoot({id:d.id,type:d.type,key:d.key,ammo:d.ammo,count:d.count,level:d.level},d.x,d.y,d.z);}
   if(msg.dm){ DM.score=msg.dm.score;DM.timer=msg.dm.timer; }
-  if(msg.dmFeed) for(const f of msg.dmFeed){const k=f.kid?actors.find(a=>a.id===f.kid):null,v=actors.find(a=>a.id===f.vid);if(v)feed(k,v,f.w,f.head);}
+  if(msg.dmFeed) for(const f of msg.dmFeed){const k=f.kid?actors.find(a=>a.id===f.kid):null,v=actors.find(a=>a.id===f.vid);if(v){feed(k,v,f.w,f.head);if(k&&k.isPlayer)killMsg(k,v,f.w,f.head);}}
 }
 function clientSendInput(){
   if(!player)return;

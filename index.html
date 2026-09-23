@@ -1191,11 +1191,23 @@ function flatBuilding(cx,cz,w,d,rot,style,base){
   DM_PROPS.push({x0:bl.x0,x1:bl.x1,z0:bl.z0,z1:bl.z1,type:'building'});
 }
 function buildDeathmatchMap(){
+  // mountain-ring sizing, computed up front so the ground plane and the peaks themselves can never
+  // drift out of sync again: a peak's own base can be up to MTN_BASE_MAX wide/deep and its centre is
+  // jittered up to MTN_JITTER_MAX off the ring line, so its inner (arena-facing) edge can come as
+  // close as (ring radius - jitter - base). Lx/Lz are pushed out far enough that even that worst
+  // case never crosses DM_HALF_X/DM_HALF_Z - previously the ring sat only 16 units out with bases up
+  // to 32 wide and +-5 jitter, so a peak could randomly intrude up to ~21 units INSIDE the supposedly
+  // open play area (this is exactly what boxed in the hilltop MG on one seed's roll). The ground
+  // plane is sized to fully cover the ring's worst-case outer edge too, so the mountains never float
+  // over an untextured void.
+  const MTN_BASE_MAX=24,MTN_JITTER_MAX=4,MTN_MARGIN=3;
+  const Lx=DM_HALF_X+MTN_BASE_MAX+MTN_JITTER_MAX+MTN_MARGIN,Lz=DM_HALF_Z+MTN_BASE_MAX+MTN_JITTER_MAX+MTN_MARGIN;
+  const MTN_OUTER=Lx+MTN_BASE_MAX+MTN_JITTER_MAX;
 
   // dirt ground, following the basin/plateau/hill profile - a basin down the middle, each village
   // plateau'd up, and a hill rising behind each bunker
   {
-    const sx=DM_HALF_X*2+40,sz=DM_HALF_Z*2+40;
+    const sx=MTN_OUTER*2+20,sz=MTN_OUTER*2+20;
     const g=new THREE.PlaneGeometry(sx,sz,64,24);g.rotateX(-Math.PI/2);
     const pos=g.attributes.position,cols=new Float32Array(pos.count*3);
     const base=new THREE.Color(0xb99a6e),dark=new THREE.Color(0x99794f),c=new THREE.Color();
@@ -1218,18 +1230,18 @@ function buildDeathmatchMap(){
   // version placed every pillar on one edge at the exact same inward/outward coordinate, so their
   // overlapping faces were perfectly coplanar and z-fought into a flickery "see-through" look.
   {
-    const Lx=DM_HALF_X+16,Lz=DM_HALF_Z+16,step=22;
+    const step=22;
     const cols=[0x6f6a5c,0x625d50,0x79725f,0x716b5c];
     const peak=(nx,nz)=>{
       const gy=dmGroundY(nx);
-      const baseW=sr(20,32),baseD=sr(20,32),h1=sr(70,120),h2=h1+sr(30,70);
+      const baseW=sr(MTN_BASE_MAX*0.83,MTN_BASE_MAX),baseD=sr(MTN_BASE_MAX*0.83,MTN_BASE_MAX),h1=sr(70,120),h2=h1+sr(30,70);
       const c1=cols[Math.floor(srand()*cols.length)],c2=cols[Math.floor(srand()*cols.length)];
       addBox(nx-baseW,gy-6,nz-baseD,nx+baseW,gy+h1,nz+baseD,c1);
       const capW=baseW*sr(0.45,0.65),capD=baseD*sr(0.45,0.65),cjx=sr(-6,6),cjz=sr(-6,6);
       addBox(nx+cjx-capW,gy+h1*0.55,nz+cjz-capD,nx+cjx+capW,gy+h2,nz+cjz+capD,c2);
     };
-    for(let x=-Lx;x<=Lx+1e-6;x+=step){peak(DM_OX+x+sr(-5,5),DM_OZ-Lz+sr(-5,5));peak(DM_OX+x+sr(-5,5),DM_OZ+Lz+sr(-5,5));}
-    for(let z=-Lz+step;z<Lz-1e-6;z+=step){peak(DM_OX-Lx+sr(-5,5),DM_OZ+z+sr(-5,5));peak(DM_OX+Lx+sr(-5,5),DM_OZ+z+sr(-5,5));}
+    for(let x=-Lx;x<=Lx+1e-6;x+=step){peak(DM_OX+x+sr(-MTN_JITTER_MAX,MTN_JITTER_MAX),DM_OZ-Lz+sr(-MTN_JITTER_MAX,MTN_JITTER_MAX));peak(DM_OX+x+sr(-MTN_JITTER_MAX,MTN_JITTER_MAX),DM_OZ+Lz+sr(-MTN_JITTER_MAX,MTN_JITTER_MAX));}
+    for(let z=-Lz+step;z<Lz-1e-6;z+=step){peak(DM_OX-Lx+sr(-MTN_JITTER_MAX,MTN_JITTER_MAX),DM_OZ+z+sr(-MTN_JITTER_MAX,MTN_JITTER_MAX));peak(DM_OX+Lx+sr(-MTN_JITTER_MAX,MTN_JITTER_MAX),DM_OZ+z+sr(-MTN_JITTER_MAX,MTN_JITTER_MAX));}
   }
 
   // village: dense, shabby combat-outpost clutter - flat-roofed mudbrick AND bare-concrete boxes,

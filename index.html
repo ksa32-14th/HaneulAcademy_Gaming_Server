@@ -3371,6 +3371,15 @@ function drawMap(ctx,W,H,cx,cz,span,big){
       ctx.fillStyle=p.type==='building'?'#9a9c92':p.type==='container'?'#8a5a3a':p.type==='sandbag'?'#c2ab7e':(p.team===0?'#4f8cff':'#ff4b3e');
       ctx.fillRect(wx(p.x0),wz(p.z0),(p.x1-p.x0)*sc,(p.z1-p.z0)*sc);
     }
+    // hilltop MGs didn't show up on the map at all before, which - on top of sitting well behind
+    // each base, off the beaten path toward the enemy - made them very easy to miss entirely
+    const lwm=W/188;
+    for(const m of DM_MGS||[]){
+      ctx.save();ctx.translate(wx(m.x),wz(m.z));
+      ctx.fillStyle=m.occupant?'#666':'#ffd23d';ctx.strokeStyle=m.team===0?'#4f8cff':'#ff4b3e';ctx.lineWidth=1.5*lwm;
+      ctx.beginPath();ctx.arc(0,0,4*lwm,0,Math.PI*2);ctx.fill();ctx.stroke();
+      ctx.restore();
+    }
   } else {
     ctx.fillStyle='#1f5674';ctx.fillRect(0,0,W,H);
     ctx.imageSmoothingEnabled=true;ctx.drawImage(BG,(cx-span/2+MAP_HALF)/2,(cz-span/2+MAP_HALF)/2,span/2,span/2,0,0,W,H);

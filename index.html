@@ -1282,18 +1282,20 @@ function buildDeathmatchMap(){
       x+=halfW+sr(4.5,7);
     }
   }
-  // a second, denser pass through just the basin (interleaved rows, offset from the plateau ones
-  // above) - the open basin floor read comparatively empty next to the two villages flanking it
-  for(const rz of [-24,-8,8,24]){
+  // a second, light pass through just the basin (interleaved rows, offset from the plateau ones
+  // above) - the open basin floor read comparatively empty next to the two villages flanking it.
+  // Kept light on purpose - just 2 rows, lower placement odds, wider spacing - this basin still
+  // needs to read as open ground to fight across, not a third village.
+  for(const rz of [-14,14]){
     let x=-18;
     while(x<18){
       const roll=srand();
       let halfW=2;
-      if(roll<0.4){
+      if(roll<0.28){
         const w=Math.round(sr(4,6)),d=Math.round(sr(4,6)),rot=Math.floor(srand()*4);
         flatBuilding(DM_OX+x+sr(-0.6,0.6),DM_OZ+rz+sr(-2,2),w,d,rot,srand()<0.5?'mud':'conc',dmGroundY(DM_OX+x));
         halfW=(rot%2?d:w)/2;
-      } else if(roll<0.8){
+      } else if(roll<0.55){
         const len=sr(3,5);
         if(srand()<0.5) sandbagRun('x',DM_OZ+rz+sr(-2,2),DM_OX+x-len/2,DM_OX+x+len/2,null,dmGroundY(DM_OX+x));
         else sandbagRun('z',DM_OX+x+sr(-0.6,0.6),DM_OZ+rz-len/2,DM_OZ+rz+len/2,null,dmGroundY(DM_OX+x));
@@ -1343,8 +1345,8 @@ function buildDeathmatchMap(){
   DM_BUNKERS=[bk0,bk1];
   // MG rooftop: sits directly on top of each team's own bunker - the big blue/red-roofed building
   // already shown on the map (drawMap colours DM_PROPS type:'bunker' by team) - instead of a
-  // separate building, bespoke or reused. Exterior staircase up the inner (basin-facing) face, a
-  // little sandbag cover around the gun; the bunker's own team-colour wall band already IDs it.
+  // separate building, bespoke or reused. Exterior staircase up the outer (back) face, a little
+  // sandbag cover around the gun; the bunker's own team-colour wall band already IDs it.
   DM_MGS=[];
   for(const side of [-1,1]){
     const team=side<0?0:1;
@@ -1352,8 +1354,10 @@ function buildDeathmatchMap(){
     const x0=bk.x0,x1=bk.x1,z0=bk.z0,z1=bk.z1,y0=bk.y0,y1=bk.roofY,tz=bk.z;
     // exterior staircase on the OUTER face (the bunker's back, away from the basin/arena) - reads
     // cleaner on the approach from your own side (nothing jutting out toward the enemy) and stays
-    // clear of the gun's own basin-facing firing arc
-    const stepN=10,stepRun=0.3,stepRise=(y1-y0)/stepN,sz0=tz-1.3,sz1=tz+1.3;
+    // clear of the gun's own basin-facing firing arc. 13 shallow steps instead of 10 taller ones -
+    // each step's rise has to stay under the ~0.4 auto-step threshold moveActor uses to climb a
+    // ledge while walking, or it takes an actual jump to mount every single step.
+    const stepN=13,stepRun=0.3,stepRise=(y1-y0)/stepN,sz0=tz-1.3,sz1=tz+1.3;
     for(let i=1;i<=stepN;i++){
       const sa=side<0?x0-i*stepRun:x1+(i-1)*stepRun,sb=side<0?x0-(i-1)*stepRun:x1+i*stepRun;
       // the step against the wall reaches full roof height; each one further out is shorter, down
@@ -1362,6 +1366,11 @@ function buildDeathmatchMap(){
       const topY=y1-(i-1)*stepRise;
       addBox(Math.min(sa,sb),y0,sz0,Math.max(sa,sb),topY,sz1,0x76797a);
     }
+    // seal off the open ground just past the foot of the stairs instead of leaving it as empty,
+    // pointless walkable space out to the far mountain ring - a real, solid HESCO barrier right
+    // behind each bunker reads as "this is the edge", rather than an invisible clamp far beyond it
+    const wallX=side<0?x0-stepN*stepRun-1.2:x1+stepN*stepRun+1.2;
+    bigWall('z',wallX,tz-6,tz+6,5,y0);
     // gun sits near the roof's front (basin-facing) edge rather than centred - dead centre left it
     // shielded by the bunker's own bulk on shots from below/ahead, so bots down in the basin
     // essentially never had a sightline back up at it even while it was actively firing on them
@@ -1403,7 +1412,12 @@ function buildDeathmatchMap(){
     base.position.set(gx,y1,tz);base.rotation.y=yaw+Math.PI;
     base.traverse(m=>{if(m.isMesh){m.castShadow=true;m.receiveShadow=true;}});
     scene.add(base);
-    DM_MGS.push({x:gx,y:y1,z:tz,yaw,team,occupant:null,mag:50,mesh:base,gunMesh:gun});   // 50 = WEAPONS.MG.mag, hardcoded: this runs before the WEAPONS table exists (buildDeathmatchMap fires during BR world-gen, well above it in load order)
+    // ground-level point just past the foot of the stairs (the bunker isn't a registered BLD entry,
+    // so the normal building/stairs pathing never finds this route on its own) - dmBotWander routes
+    // bots through this before the roof itself, so they actually climb up instead of just walking
+    // into the wall below the mount point
+    const stairBase={x:side<0?x0-4.5:x1+4.5,z:tz};
+    DM_MGS.push({x:gx,y:y1,z:tz,yaw,team,occupant:null,mag:50,mesh:base,gunMesh:gun,stairBase});   // 50 = WEAPONS.MG.mag, hardcoded: this runs before the WEAPONS table exists (buildDeathmatchMap fires during BR world-gen, well above it in load order)
   }
   const frontSpawns=(localX,face)=>{const pts=[];for(let i=0;i<18;i++)pts.push({x:DM_OX+localX+face*sr(8,14),z:DM_OZ+sr(-18,18)});return pts;};
   DM_SPAWN=[
@@ -2956,17 +2970,24 @@ function hasUsable(b){for(const w of b.slots)if(w&&(w.mag>0||b.ammo[WEAPONS[w.ke
 function chooseWeapon(b,dist){
   if(b.mg) return;   // manning a mounted MG - stay on it, don't swap to whatever slot it displaced
   let best=-1,score=-1;
-  // deathmatch bots lean into sniper/DMR sooner and harder than in BR - a wider window (kicks in at
-  // a shorter distance) and a bigger bonus, so the Kar98k/MK14 actually see use instead of bots
-  // defaulting to their AR-type pick at every distance that isn't extreme long range
   for(let s=0;s<3;s++){const w=b.slots[s];if(!w)continue;const d=WEAPONS[w.key];if(w.mag<=0&&b.ammo[d.ammo]<=0)continue;
     let sc=d.rank; if(d.kind==='shotgun')sc+=dist<12?4:dist>30?-3:0;
-    if(d.kind==='sniper')sc+=dist>(G.dm?26:45)?(G.dm?4:3):dist<15?-2:0;
-    if(d.kind==='dmr')sc+=dist>(G.dm?14:25)?(G.dm?3:2):dist<10?-2:0;
-    // role bias: a gentle nudge, not a lock - a flat +3 here used to swamp the distance terms above
-    // (e.g. sniper's own dist<15 penalty is only -2), so a sniper-role bot kept the bolt-action at
-    // point-blank range and an assault-role bot ignored a DMR at extreme range. This only breaks
-    // ties in the ambiguous middle distance band; the swings at either extreme still win on their own.
+    if(G.dm){
+      // in DM, sniper/DMR base ranks (5) already tie or beat the ARs on paper, so without a real
+      // penalty outside long range they got picked far too often at the basin's actually-short
+      // engagement distances. Now it's the opposite by default: rapid-fire wins everywhere except
+      // genuine long range, where the bolt-action/DMR takes over instead.
+      const longRange=dist>32;
+      if(d.kind==='sniper')sc+=longRange?4:-3;
+      else if(d.kind==='dmr')sc+=longRange?3:-2.5;
+      else if(d.auto)sc+=longRange?-1:1.5;
+    } else {
+      if(d.kind==='sniper')sc+=dist>45?3:dist<15?-2:0;
+      if(d.kind==='dmr')sc+=dist>25?2:dist<10?-2:0;
+    }
+    // role bias: a gentle nudge, not a lock - only enough to break a near-tie. At the extremes the
+    // distance terms above (now much stronger for sniper/DMR outside long range) still win on their
+    // own, so even a sniper-role bot drops the bolt-action for rapid-fire once a fight is up close.
     if(G.dm&&b.dmRole==='sniper'&&(d.kind==='sniper'||d.kind==='dmr'))sc+=1.2;
     if(G.dm&&b.dmRole==='assault'&&(d.kind==='ar'||d.kind==='smg'))sc+=1.2;
     if(sc>score){score=sc;best=s;}}
@@ -3085,7 +3106,10 @@ function dmBotWander(b){
     else{
       const d=Math.hypot(b.pos.x-B.mgTarget.x,b.pos.z-B.mgTarget.z);
       if(d<2.2){ mountMG(b,B.mgTarget); B.mgTarget=null; B.path=[]; B.mode='none'; return; }
-      if(B.mode!=='mg'||!B.path.length) setGoal(b,B.mgTarget.x,B.mgTarget.z,'mg');
+      // the bunker isn't a registered BLD building, so setGoal's own stairs-pathing never fires for
+      // it - route through the foot of the exterior staircase first, or the bot just walks into the
+      // wall below the mount point instead of climbing up to it
+      if(B.mode!=='mg'||!B.path.length){ setGoal(b,B.mgTarget.x,B.mgTarget.z,'mg'); if(B.mgTarget.stairBase) B.path.unshift({x:B.mgTarget.stairBase.x,z:B.mgTarget.stairBase.z}); }
       B.urgent=true;
       return;
     }
@@ -3093,7 +3117,7 @@ function dmBotWander(b){
     // only the bot actually assigned to the gun bothers going for it, and goes for it hard - one
     // dedicated MG gunner per team, not a coin-flip among all of them
     const mg=DM_MGS.find(m=>m.team===b.team&&!m.occupant);
-    if(mg){ B.mgTarget=mg; setGoal(b,mg.x,mg.z,'mg'); B.urgent=true; return; }
+    if(mg){ B.mgTarget=mg; setGoal(b,mg.x,mg.z,'mg'); if(mg.stairBase) B.path.unshift({x:mg.stairBase.x,z:mg.stairBase.z}); B.urgent=true; return; }
   }
   if(B.mode==='dm'&&B.path.length) return;
   const side=b.team===0?1:-1,z=DM_OZ+rnd(-40,40);

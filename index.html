@@ -496,17 +496,18 @@ function P(g,c,x,y,z,rx){const m=M(g,c,x,y,z);if(rx)m.rotation.x=rx;return m;}
 // 5:3 rectangle, long axis along X - each team spawns from a bunker on a short (Z) edge and fights
 // down the long lane. Much smaller than the old 420x420 square so AR/DMR fights actually happen
 // instead of everyone wandering for a minute before finding anyone.
-const DM_OX=6000,DM_OZ=0,DM_HALF_X=72,DM_HALF_Z=48,DM_GROUND=0;
+const DM_OX=6000,DM_OZ=0,DM_HALF_X=60,DM_HALF_Z=48,DM_GROUND=0;
 function inDM(x,z){return Math.abs(x-DM_OX)<DM_HALF_X&&Math.abs(z-DM_OZ)<DM_HALF_Z;}
-// elevation profile along the long axis: a flat basin down the middle and each village sitting up
-// on a flat plateau - height only depends on distance from centre (uniform across Z), like a simple
-// cross-section. There's no separate hill tier any more: the mounted MG sits on each team's own
-// bunker roof now (see buildDeathmatchMap), not on any terrain feature, so there's no gameplay need
-// for a large elevated area any more either - basin widened / plateau shrunk accordingly (overall
-// field width, DM_HALF_X, stays as-is). The ramp stays clear of anything flat-bottomed sitting on it
-// - a box straddling a slope sits half-buried/half-floating since it only samples height once, at
-// its own centre.
-const DM_SLOPE1=[34,42]; // basin -> plateau ramp, in |local x| - village placement skips this band
+// elevation profile along the long axis: a flat basin down the middle (original size, with its own
+// buildings/sandbags) and each village sitting up on a flat plateau - height only depends on
+// distance from centre (uniform across Z), like a simple cross-section. There's no separate hill
+// tier any more: the mounted MG sits on each team's own bunker roof now (see buildDeathmatchMap),
+// not on any terrain feature. The "too much hill" issue is instead solved by shrinking the overall
+// field (DM_HALF_X) down to just past the bunkers - the outermost structures on each side - rather
+// than by shrinking the plateau itself, so the plateau's own buildings/sandbags stay put. The ramp
+// stays clear of anything flat-bottomed sitting on it - a box straddling a slope sits half-buried/
+// half-floating since it only samples height once, at its own centre.
+const DM_SLOPE1=[21,29]; // basin -> plateau ramp, in |local x| - village placement skips this band
 function dmTerrainH(lx){
   const ax=Math.min(Math.abs(lx),DM_HALF_X);
   if(ax<DM_SLOPE1[0]) return 0;
@@ -1247,7 +1248,9 @@ function buildDeathmatchMap(){
   // and never a gable roof in sight) so every lane is close-quarters cover-to-cover fighting,
   // "The Outpost"-style.
   const BASE_DX=48; // local x offset of each team's base from arena centre - bunker (half-width 6)
-                     // sits at 42-54, well inside the flat plateau (29-56) with margin either side
+                     // sits at 42-54, on the plateau (29-DM_HALF_X) with a small margin to the
+                     // boundary - it's the outermost structure on each side, so the field boundary
+                     // now hugs it directly instead of leaving empty hillside beyond it
   for(const rz of [-32,-16,0,16,32]){
     let x=-36;
     while(x<36){
@@ -1277,6 +1280,26 @@ function buildDeathmatchMap(){
         halfW=len/2;
       }
       x+=halfW+sr(4.5,7);
+    }
+  }
+  // a second, denser pass through just the basin (interleaved rows, offset from the plateau ones
+  // above) - the open basin floor read comparatively empty next to the two villages flanking it
+  for(const rz of [-24,-8,8,24]){
+    let x=-18;
+    while(x<18){
+      const roll=srand();
+      let halfW=2;
+      if(roll<0.4){
+        const w=Math.round(sr(4,6)),d=Math.round(sr(4,6)),rot=Math.floor(srand()*4);
+        flatBuilding(DM_OX+x+sr(-0.6,0.6),DM_OZ+rz+sr(-2,2),w,d,rot,srand()<0.5?'mud':'conc',dmGroundY(DM_OX+x));
+        halfW=(rot%2?d:w)/2;
+      } else if(roll<0.8){
+        const len=sr(3,5);
+        if(srand()<0.5) sandbagRun('x',DM_OZ+rz+sr(-2,2),DM_OX+x-len/2,DM_OX+x+len/2,null,dmGroundY(DM_OX+x));
+        else sandbagRun('z',DM_OX+x+sr(-0.6,0.6),DM_OZ+rz-len/2,DM_OZ+rz+len/2,null,dmGroundY(DM_OX+x));
+        halfW=len/2;
+      }
+      x+=halfW+sr(5,8);
     }
   }
   // sandbag firing line facing into the village just outside each team's bunker - the last line of
@@ -1327,13 +1350,17 @@ function buildDeathmatchMap(){
     const team=side<0?0:1;
     const bk=side<0?bk0:bk1;
     const x0=bk.x0,x1=bk.x1,z0=bk.z0,z1=bk.z1,y0=bk.y0,y1=bk.roofY,tz=bk.z;
-    // exterior staircase on the INNER face (facing back toward the basin) - approached from the
-    // basin side every time, so the outer face (toward the mountain wall) would mean walking all
-    // the way around first
+    // exterior staircase on the OUTER face (the bunker's back, away from the basin/arena) - reads
+    // cleaner on the approach from your own side (nothing jutting out toward the enemy) and stays
+    // clear of the gun's own basin-facing firing arc
     const stepN=10,stepRun=0.3,stepRise=(y1-y0)/stepN,sz0=tz-1.3,sz1=tz+1.3;
     for(let i=1;i<=stepN;i++){
-      const sa=side<0?x1+(i-1)*stepRun:x0-i*stepRun,sb=side<0?x1+i*stepRun:x0-(i-1)*stepRun;
-      addBox(Math.min(sa,sb),y0,sz0,Math.max(sa,sb),y0+i*stepRise,sz1,0x76797a);
+      const sa=side<0?x0-i*stepRun:x1+(i-1)*stepRun,sb=side<0?x0-(i-1)*stepRun:x1+i*stepRun;
+      // the step against the wall reaches full roof height; each one further out is shorter, down
+      // to ground level at the far end - the previous version had this inverted (tallest step
+      // farthest from the wall, shortest right against it)
+      const topY=y1-(i-1)*stepRise;
+      addBox(Math.min(sa,sb),y0,sz0,Math.max(sa,sb),topY,sz1,0x76797a);
     }
     // gun sits near the roof's front (basin-facing) edge rather than centred - dead centre left it
     // shielded by the bunker's own bulk on shots from below/ahead, so bots down in the basin
@@ -1346,15 +1373,22 @@ function buildDeathmatchMap(){
     // arena at yaw=-PI/2, team1 the mirror. The gun model's barrel points along its own local +Z, so
     // the group needs +PI on top of that to actually point the same way as that forward vector.
     const yaw=side<0?-Math.PI/2:Math.PI/2;
-    // a heavier, more detailed tripod gun than before: cooling-jacketed barrel with a muzzle brake,
-    // a small gun shield, spade grips, an ammo box on the side, and an actual seat behind it (the
-    // gunner sits, doesn't stand) instead of six plain boxes that read as a toy
-    const grp=new THREE.Group(),legCol=0x24261f,gunCol=0x1c1f1c,metalCol=0x3a3d38,woodCol=0x4a3b28;
-    grp.add(
+    // the tripod/seat (base) stay put in the world; only the gun itself (barrel, shield, grips,
+    // ammo box) turns to track the gunner's aim, like a real pintle-mounted gun swiveling on a
+    // fixed base rather than the whole rig spinning around. Keeping the seat fixed also keeps the
+    // gunner's own camera anchored at one stable spot instead of sweeping through the gun's own
+    // geometry as it turns to follow the player's look direction.
+    const base=new THREE.Group(),legCol=0x24261f,gunCol=0x1c1f1c,metalCol=0x3a3d38,woodCol=0x4a3b28;
+    base.add(
       P(gB(.09,1.05,.09),legCol,0,.5,-.5,0.4),
       P(gB(.09,1.05,.09),legCol,-.45,.5,.35,-0.55),
       P(gB(.09,1.05,.09),legCol,.45,.5,.35,-0.55),
       P(gB(.32,.04,.32),legCol,0,.06,0),
+      P(gC(.16,.05),woodCol,0,.62,-.72,1.5708),
+      P(gB(.04,.55,.04),legCol,0,.34,-.72)
+    );
+    const gun=new THREE.Group();
+    gun.add(
       P(gC(.09,.36),metalCol,0,1.05,0,1.5708),
       P(gB(.22,.22,1.0),gunCol,0,1.15,.15),
       P(gC(.08,.5),metalCol,0,1.15,.55),
@@ -1363,14 +1397,13 @@ function buildDeathmatchMap(){
       P(gB(.05,.16,.05),woodCol,-.14,.95,-.32,0.3),
       P(gB(.05,.16,.05),woodCol,.14,.95,-.32,-0.3),
       P(gB(.5,.32,.03),metalCol,0,1.3,-.02),
-      P(gB(.16,.2,.24),0x33361f,.24,1.05,.05),
-      P(gC(.16,.05),woodCol,0,.62,-.72,1.5708),
-      P(gB(.04,.55,.04),legCol,0,.34,-.72)
+      P(gB(.16,.2,.24),0x33361f,.24,1.05,.05)
     );
-    grp.position.set(gx,y1,tz);grp.rotation.y=yaw+Math.PI;
-    grp.traverse(m=>{if(m.isMesh){m.castShadow=true;m.receiveShadow=true;}});
-    scene.add(grp);
-    DM_MGS.push({x:gx,y:y1,z:tz,yaw,team,occupant:null,mag:50,mesh:grp});   // 50 = WEAPONS.MG.mag, hardcoded: this runs before the WEAPONS table exists (buildDeathmatchMap fires during BR world-gen, well above it in load order)
+    base.add(gun);
+    base.position.set(gx,y1,tz);base.rotation.y=yaw+Math.PI;
+    base.traverse(m=>{if(m.isMesh){m.castShadow=true;m.receiveShadow=true;}});
+    scene.add(base);
+    DM_MGS.push({x:gx,y:y1,z:tz,yaw,team,occupant:null,mag:50,mesh:base,gunMesh:gun});   // 50 = WEAPONS.MG.mag, hardcoded: this runs before the WEAPONS table exists (buildDeathmatchMap fires during BR world-gen, well above it in load order)
   }
   const frontSpawns=(localX,face)=>{const pts=[];for(let i=0;i<18;i++)pts.push({x:DM_OX+localX+face*sr(8,14),z:DM_OZ+sr(-18,18)});return pts;};
   DM_SPAWN=[
@@ -2172,6 +2205,11 @@ function dmRespawn(a){ dmPlaceAtSpawn(a); }
 // literally the seat). 0.45 wasn't enough; the gun body itself starts at local z=-0.35, so the old
 // offset barely cleared that and was still nose-to-nose with it.
 const MG_SEAT_OFS=1.15;
+// how far the gun can swing each way from the mount's own facing before it's clamped. Without a
+// limit, looking far enough around (well short of fully backward) swings the barrel/receiver close
+// enough to the fixed camera spot behind it to fill the whole view - a real tripod gun has a limited
+// traverse arc for exactly this reason, so this doubles as the actual visibility fix.
+const MG_TRAVERSE=100*Math.PI/180;
 // mounted hilltop MG (deathmatch, player or bot): F to mount/dismount. Installs the MG into whatever
 // slot was current (restored on dismount), with its own 'MG' ammo pool set to Infinity so the
 // existing mag/reload system just works unmodified - 50 rounds (WEAPONS.MG.mag) per belt, reload
@@ -2193,8 +2231,12 @@ function mountMG(p,mg){
   // time - otherwise dismounting and remounting was a free instant reload, skipping the real one
   p.slots[p.cur]={key:'MG',mag:mg.mag===undefined?WEAPONS.MG.mag:mg.mag};
   p.ammo.MG=Infinity;
+  // the tripod/seat (mg.mesh) never moves - only the gun itself (mg.gunMesh) tracks the gunner's
+  // look direction - so the seat position always uses the mount's own fixed yaw, never the live
+  // p.yaw. That also keeps the camera anchored at a stable point behind the gun instead of orbiting
+  // through its own geometry as the gun swings to follow the player's aim.
   p.pos.set(mg.x+Math.sin(mg.yaw)*MG_SEAT_OFS,mg.y,mg.z+Math.cos(mg.yaw)*MG_SEAT_OFS); p.yaw=mg.yaw; p.pitch=0; p.stance='crouch'; p.vy=0; p.onGround=true; p.reloadT=0;
-  if(mg.mesh){mg.mesh.rotation.y=mg.yaw+Math.PI;mg.mesh.rotation.x=0;}
+  if(mg.gunMesh) mg.gunMesh.rotation.set(0,0,0);
 }
 function dismountMG(p){
   const mg=p.mg; if(!mg) return;
@@ -2203,7 +2245,7 @@ function dismountMG(p){
   p.slots[p.cur]=p.mgPrevSlot||null; p.mgPrevSlot=null;
   p.ammo.MG=0; p.reloadT=0;
   if(!p.slots[p.cur]){const s=p.slots.findIndex(Boolean);if(s>=0)p.cur=s;}
-  if(mg.mesh){mg.mesh.rotation.y=mg.yaw+Math.PI;mg.mesh.rotation.x=0;}
+  if(mg.gunMesh) mg.gunMesh.rotation.set(0,0,0);
 }
 function dmKill(v,k,wname,head){
   if(v.mg) dismountMG(v);
@@ -2212,7 +2254,9 @@ function dmKill(v,k,wname,head){
   if(k&&k.team!==v.team){
     k.kills++;DM.score[k.team]=(DM.score[k.team]||0)+1;
     if(!k.isPlayer&&k.brain&&k.brain.target===v)k.brain.target=null;
-    dmCheckAirstrike();
+    // skip the tier check on the kill that ends the match - it's always a multiple-of-10 crossing
+    // at DM.target(50), so without this the win screen was preceded by a fresh air-raid siren every time
+    if(DM.score[k.team]<DM.target) dmCheckAirstrike();
   }
   feed(k,v,wname,head);
   DM.feedQ.push({kid:k?k.id:null,vid:v.id,w:wname,head:!!head});
@@ -2784,13 +2828,14 @@ function updatePlayer(dt){
     if(!standUp&&pressed.has('Space')&&p.onGround&&!p.inWater&&!p.mg&&!tryVault(p)){p.vy=7.4;p.onGround=false;}
     if(!p.vault) moveActor(p,mx*sp,mz*sp,dt);
   }
-  // tripod-mounted: no walking away from it, pinned every frame - offset back off the gun's own
-  // pivot point (which is also where the model's geometry is centred) so the camera sits behind the
-  // gun looking over it, not planted inside the model itself; the offset turns with current yaw
-  // since the whole assembly (including the seat) swivels together as the gunner looks around
+  // tripod-mounted: no walking away from it, pinned every frame. The tripod/seat itself never
+  // moves, so the pin point always uses the mount's own fixed yaw (mg.yaw), not the live p.yaw - the
+  // camera then sits at a stable point behind the seat instead of orbiting around with the gun.
+  // Only the gun (mg.gunMesh) turns to track where the player's actually looking.
   if(p.mg){
-    p.pos.x=p.mg.x+Math.sin(p.yaw)*MG_SEAT_OFS;p.pos.y=p.mg.y;p.pos.z=p.mg.z+Math.cos(p.yaw)*MG_SEAT_OFS;p.vy=0;p.onGround=true;
-    if(p.mg.mesh){p.mg.mesh.rotation.y=p.yaw+Math.PI;p.mg.mesh.rotation.x=-p.pitch;}
+    p.yaw=p.mg.yaw+clamp(angDiff(p.mg.yaw,p.yaw),-MG_TRAVERSE,MG_TRAVERSE);
+    p.pos.x=p.mg.x+Math.sin(p.mg.yaw)*MG_SEAT_OFS;p.pos.y=p.mg.y;p.pos.z=p.mg.z+Math.cos(p.mg.yaw)*MG_SEAT_OFS;p.vy=0;p.onGround=true;
+    if(p.mg.gunMesh){p.mg.gunMesh.rotation.y=p.yaw-p.mg.yaw;p.mg.gunMesh.rotation.x=-p.pitch;}
   }
   if(!p.mg){
     if(pressed.has('Digit1'))switchTo(p,0);
@@ -3124,8 +3169,10 @@ function updateBot(b,dt){
   if(b.inWater)speed*=0.5;
   moveActor(b,mx*speed,mz*speed,dt);
   if(b.mg){
-    b.pos.x=b.mg.x+Math.sin(b.yaw)*MG_SEAT_OFS;b.pos.y=b.mg.y;b.pos.z=b.mg.z+Math.cos(b.yaw)*MG_SEAT_OFS;b.vy=0;b.onGround=true;
-    if(b.mg.mesh){b.mg.mesh.rotation.y=b.yaw+Math.PI;b.mg.mesh.rotation.x=-b.pitch;}
+    // tripod/seat stay fixed (mg.yaw, not live b.yaw); only the gun (mg.gunMesh) tracks the bot's aim
+    b.yaw=b.mg.yaw+clamp(angDiff(b.mg.yaw,b.yaw),-MG_TRAVERSE,MG_TRAVERSE);
+    b.pos.x=b.mg.x+Math.sin(b.mg.yaw)*MG_SEAT_OFS;b.pos.y=b.mg.y;b.pos.z=b.mg.z+Math.cos(b.mg.yaw)*MG_SEAT_OFS;b.vy=0;b.onGround=true;
+    if(b.mg.gunMesh){b.mg.gunMesh.rotation.y=b.yaw-b.mg.yaw;b.mg.gunMesh.rotation.x=-b.pitch;}
   }
   // stuck/anti-jam recovery now also runs while fighting (not just while following a path) - a bot
   // that chases a target it can see through a window straight through a doorway and then jams up
@@ -3194,7 +3241,10 @@ function actorTick(a,dt){
   u.chute.visible=a.state==='chute';
   // your own canopy is see-through so it never blocks the view of the landing zone
   if(a.isPlayer&&u.chute.visible&&!u.chuteSeeThru){u.chuteSeeThru=true;for(const m of u.chute.userData.mats){m.opacity=0.4;m.depthWrite=false;}}
-  const far=camD>70;if(far!==u.far){u.far=far;u.hips.visible=!far;u.proxy.visible=far;}
+  // deathmatch fights happen at much shorter range than BR and everyone's usually in view at once -
+  // the distant low-poly stand-in just made enemies harder to read for no real performance need, so
+  // it's DM-only disabled (BR keeps it - that game still has genuinely long empty sightlines).
+  const far=!G.dm&&camD>70;if(far!==u.far){u.far=far;u.hips.visible=!far;u.proxy.visible=far;}
   u.flash.visible=a.flashT>0&&!!w;
   const pistol=key&&WEAPONS[key].pistol;
   g.rotation.x=0;g.rotation.z=0;u.hips.rotation.set(0,0,0);u.spine.rotation.set(0,0,0);u.hips.position.y=0.96;

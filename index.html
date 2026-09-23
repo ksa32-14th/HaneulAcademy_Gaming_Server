@@ -466,14 +466,21 @@ function P(g,c,x,y,z,rx){const m=M(g,c,x,y,z);if(rx)m.rotation.x=rx;return m;}
 // instead of everyone wandering for a minute before finding anyone.
 const DM_OX=6000,DM_OZ=0,DM_HALF_X=80,DM_HALF_Z=48,DM_GROUND=0;
 function inDM(x,z){return Math.abs(x-DM_OX)<DM_HALF_X&&Math.abs(z-DM_OZ)<DM_HALF_Z;}
-// elevation profile along the long axis: a basin down the middle, each village sitting up on a
-// plateau, and a taller hill behind each team's bunker to shoot down into the valley from - height
-// only depends on distance from centre (uniform across Z), like a simple cross-section
+// elevation profile along the long axis: a flat basin down the middle, each village sitting up on
+// a flat plateau, and a taller (also flat-topped) hill behind each team's bunker to shoot down into
+// the valley from - height only depends on distance from centre (uniform across Z), like a simple
+// cross-section. The two ramps between them are deliberately short bands that nothing is ever
+// placed on (see the village loop's SLOPE1 skip and the generous plateau margin around the bunker)
+// - a flat-bottomed box straddling a ramp used to sit half-buried/half-floating where the real
+// ground height under it didn't match the single height sampled at its centre.
+const DM_SLOPE1=[21,29]; // basin -> plateau ramp, in |local x| - village placement skips this band
 function dmTerrainH(lx){
   const ax=Math.min(Math.abs(lx),DM_HALF_X);
-  if(ax<26) return lerp(0,4,smooth(0,26,ax));
-  if(ax<58) return lerp(4,5,smooth(26,58,ax));
-  return lerp(5,12,smooth(58,DM_HALF_X,ax));
+  if(ax<DM_SLOPE1[0]) return 0;
+  if(ax<DM_SLOPE1[1]) return lerp(0,4,smooth(DM_SLOPE1[0],DM_SLOPE1[1],ax));
+  if(ax<70) return 4;                              // plateau: full village range plus the bunker, flat
+  if(ax<78) return lerp(4,12,smooth(70,78,ax));     // hill ramp, well past the bunker - nothing sits here
+  return 12;                                         // hilltop
 }
 function dmGroundY(x){ return DM_GROUND+dmTerrainH(x-DM_OX); }
 // ---------- terrain
@@ -1106,14 +1113,19 @@ function bigWall(axis,fixed,a0,a1,h,base){
   else addBox(fixed-d,base,Math.min(a0,a1),fixed+d,base+h,Math.max(a0,a1),col);
   DM_PROPS.push(axis==='x'?{x0:Math.min(a0,a1),x1:Math.max(a0,a1),z0:fixed-d,z1:fixed+d,type:'sandbag'}:{x0:fixed-d,x1:fixed+d,z0:Math.min(a0,a1),z1:Math.max(a0,a1),type:'sandbag'});
 }
-// a plain, flat-roofed single-story box building in either mudbrick or bare concrete, with one
-// door gap - deliberately simpler than the shared building() helper (no gable roof at all, and a
-// fully custom palette) so deathmatch never gets the peaked-roof "village house" look
+// a plain, flat-roofed single-story box in either mudbrick or bare concrete, windowed on all four
+// sides but with NO door - deliberately sealed. An earlier version had a walk-in door, and bots
+// chasing a target they could see (and shoot at) straight through a window would path directly at
+// them in a straight line with no obstacle-awareness (that's how combat movement works, see
+// updateBot), slide in through the door on the way, and then get permanently stuck bouncing around
+// the tiny interior since a target on the far side of an interior wall is still "visible" through
+// another window but never straight-line reachable. Sealing the building removes the way in
+// entirely - it's still cover/sightline-breaking terrain, just never enterable, in either mode.
 const MUD_COLS=[0xc9a876,0xb8916a,0xceb488,0xa8875f,0xbfa070,0xd4b98c];
 const CONC_COLS=[0x8a8d86,0x7c8079,0x9a9d94,0x6f736c,0x878a82,0x757971];
 function flatBuilding(cx,cz,w,d,rot,style,base){
   base=base||0;
-  const h=sr(2.6,3.3),hw=w/2,hd=d/2,wt=0.3,doorW=1.3;
+  const h=sr(2.6,3.3),hw=w/2,hd=d/2,wt=0.3;
   const pal=style==='mud'?MUD_COLS:CONC_COLS,col=pal[Math.floor(srand()*pal.length)];
   const roofCol=style==='mud'?0x8a6f4a:0x4a4d47;
   const e=emitter(cx,cz,rot);
@@ -1126,19 +1138,17 @@ function flatBuilding(cx,cz,w,d,rot,style,base){
     mk(-span/2,-ww/2,sill,head);mk(ww/2,span/2,sill,head);
   };
   windowed((p0,p1,y0,y1)=>e.box(p0,y0,-hd,p1,y1,-hd+wt,col),w);           // back wall
+  windowed((p0,p1,y0,y1)=>e.box(p0,y0,hd-wt,p1,y1,hd,col),w);             // front wall
   windowed((p0,p1,y0,y1)=>e.box(-hw,y0,p0,-hw+wt,y1,p1,col),d);           // left wall
   windowed((p0,p1,y0,y1)=>e.box(hw-wt,y0,p0,hw,y1,p1,col),d);             // right wall
-  e.box(-hw,base,hd-wt,-doorW/2,base+h,hd,col);e.box(doorW/2,base,hd-wt,hw,base+h,hd,col);
   e.box(-hw-0.3,base+h,-hd-0.3,hw+0.3,base+h+0.22,hd+0.3,roofCol);
   const c1=e.pt(-hw,-hd),c2=e.pt(hw,hd);
-  BLD.push({x0:Math.min(c1.x,c2.x),x1:Math.max(c1.x,c2.x),z0:Math.min(c1.z,c2.z),z1:Math.max(c1.z,c2.z),base,floors:1,fh:h,
-    doorOut:e.pt(0,hd+1.3),doorIn:e.pt(0,hd-0.8),stairs:null,gate:null});
+  DM_PROPS.push({x0:Math.min(c1.x,c2.x),x1:Math.max(c1.x,c2.x),z0:Math.min(c1.z,c2.z),z1:Math.max(c1.z,c2.z),type:'building'});
 }
 function buildDeathmatchMap(){
-  // (unlike the old version, DM never touches the shared building()/WALL_COLS/LOOT_SPOTS at all
-  // any more - flatBuilding() has its own palette and never queues loot, so there's nothing to
-  // save and restore here)
-  const bldFrom=BLD.length;
+  // (unlike the old version, DM never touches the shared building()/WALL_COLS/LOOT_SPOTS/BLD at
+  // all any more - flatBuilding() has its own palette, is sealed with no door so it never needs
+  // pathfinding/routing metadata, and never queues loot, so there's nothing to save and restore)
 
   // dirt ground, following the basin/plateau/hill profile - a basin down the middle, each village
   // plateau'd up, and a hill rising behind each bunker
@@ -1188,6 +1198,10 @@ function buildDeathmatchMap(){
   for(const rz of [-32,-16,0,16,32]){
     let x=-40;
     while(x<40){
+      // skip the basin->plateau ramp entirely - a flat-bottomed box straddling sloped ground is
+      // what caused the "sinking/floating" look reported on the hill ramp, so nothing at all gets
+      // placed on either ramp (this one, or the hill ramp past the bunker - see dmTerrainH)
+      if(Math.abs(x)>=DM_SLOPE1[0]&&Math.abs(x)<=DM_SLOPE1[1]){x+=sr(6,9);continue;}
       const roll=srand();
       if(roll<0.42){
         const w=Math.round(sr(5,8)),d=Math.round(sr(5,7)),rot=Math.floor(srand()*4);
@@ -1216,8 +1230,6 @@ function buildDeathmatchMap(){
     const xj=DM_OX+sr(-2,2),gy=dmGroundY(xj);
     if(kind==='hesco') bigWall('z',xj,z0,z1,null,gy); else sandbagRun('z',xj,z0,z1,null,gy);
   }
-  for(let i=bldFrom;i<BLD.length;i++){const b=BLD[i];DM_PROPS.push({x0:b.x0,x1:b.x1,z0:b.z0,z1:b.z1,type:'building'});}
-
   // two sealed, windowless respawn bunkers (one per team) - there is no door, so nobody ever
   // walks in; players only ever arrive here by being teleported in in dmRespawn()
   function bunker(localX){
@@ -1612,7 +1624,56 @@ function animateBolt(gunGroup,prog){
 function updateFx(dt){
   for(const l of tracers){if(l.life>0){l.life-=dt;if(l.life<=0)l.visible=false;}}
   for(const m of parts){if(m.life>0){m.life-=dt;m.v.y-=9*dt;m.position.addScaledVector(m.v,dt);if(m.life<=0)m.visible=false;}}
-  updateProjectiles(dt);updatePending(dt);
+  updateProjectiles(dt);updatePending(dt);updateBombs(dt);updateBlasts(dt);
+}
+// ---------- airstrike visuals: a falling bomb model (dark body + nose cone) that drops in from
+// high overhead and calls back on arrival, plus an expanding/fading fireball for the explosion
+const bombPool=[];
+for(let i=0;i<12;i++){
+  const g=new THREE.Group();
+  const body=new THREE.Mesh(new THREE.CylinderGeometry(0.11,0.11,0.68,8),new THREE.MeshBasicMaterial({color:0x1c1c1c}));
+  body.rotation.x=Math.PI/2;
+  const tip=new THREE.Mesh(new THREE.ConeGeometry(0.11,0.24,8),new THREE.MeshBasicMaterial({color:0x2b2b2b}));
+  tip.position.z=0.46;tip.rotation.x=Math.PI/2;
+  const fin=new THREE.Mesh(new THREE.BoxGeometry(0.32,0.02,0.16),new THREE.MeshBasicMaterial({color:0x111111}));
+  fin.position.z=-0.32;
+  g.add(body,tip,fin);g.visible=false;g.frustumCulled=false;scene.add(g);
+  bombPool.push({g,from:new V3(),to:new V3(),t:0,dur:0,onArrive:null});
+}
+let bombI=0;
+function dropBomb(x,z,gy,delay,onArrive){
+  const b=bombPool[bombI++%bombPool.length];
+  b.to.set(x,gy,z);b.from.set(x+rnd(-4,4),gy+65,z+rnd(-4,4));
+  b.dur=0.85;b.t=-delay;b.onArrive=onArrive;
+  b.g.visible=true;b.g.position.copy(b.from);
+  const d=b.to.clone().sub(b.from).normalize();b.g.rotation.set(0,Math.atan2(d.x,d.z),0);
+}
+function updateBombs(dt){
+  for(const b of bombPool){
+    if(!b.g.visible)continue;
+    b.t+=dt; if(b.t<0)continue;
+    if(b.t>=b.dur){b.g.visible=false;if(b.onArrive){const fn=b.onArrive;b.onArrive=null;fn();}continue;}
+    b.g.position.lerpVectors(b.from,b.to,b.t/b.dur);
+  }
+}
+const blastPool=[];
+for(let i=0;i<12;i++){
+  const m=new THREE.Mesh(new THREE.SphereGeometry(1,12,8),new THREE.MeshBasicMaterial({color:0xffa640,transparent:true,opacity:0.9,depthWrite:false}));
+  m.visible=false;m.frustumCulled=false;scene.add(m);blastPool.push({m,t:0,dur:0.55});
+}
+let blastI=0;
+function spawnBlast(pos){
+  const b=blastPool[blastI++%blastPool.length];
+  b.m.position.copy(pos);b.m.scale.setScalar(0.15);b.m.material.opacity=0.92;b.t=0;b.m.visible=true;
+}
+function updateBlasts(dt){
+  for(const b of blastPool){
+    if(!b.m.visible)continue;
+    b.t+=dt;const k=Math.min(1,b.t/b.dur);
+    b.m.scale.setScalar(lerp(0.4,6,1-(1-k)*(1-k)));
+    b.m.material.opacity=0.92*(1-k);
+    if(k>=1)b.m.visible=false;
+  }
 }
 
 // ---------- audio
@@ -1943,13 +2004,14 @@ function dmCheckWin(){
   if(DM.score[0]>=DM.target||DM.score[1]>=DM.target||DM.timer>=DM.limit) dmEndMatch();
 }
 // airstrike event: whichever team's score first crosses each new multiple of 10 triggers one -
-// 3 bombs land randomly in EACH team's territory (6 total), each doing distance-falloff damage out
-// to a 5m radius. Only the host/solo side picks points and applies damage (damage() is never
+// 5 bombs land randomly in EACH team's territory (10 total), each doing distance-falloff damage
+// out to a 5m radius. Only the host/solo side picks points and applies damage (damage() is never
 // authoritative on a client); the host also broadcasts the points so clients can play the same
-// siren + explosions even though their hp only actually changes once the next state sync lands.
+// siren + falling bombs + explosions even though their hp only actually changes once the next
+// state sync lands.
 function dmPickAirstrikePts(){
   const pts=[];
-  for(const side of[-1,1]) for(let i=0;i<3;i++){
+  for(const side of[-1,1]) for(let i=0;i<5;i++){
     const x=DM_OX+side*sr(10,68),z=DM_OZ+sr(-DM_HALF_Z+8,DM_HALF_Z-8);
     pts.push({x,z});
   }
@@ -1962,7 +2024,8 @@ function dmAirstrikeSiren(){
 }
 function dmExplodeAt(p,doDamage){
   const gy=dmGroundY(p.x),pos=new V3(p.x,gy+0.6,p.z);
-  puff(pos,false,16);
+  spawnBlast(pos);
+  puff(pos,false,22);
   if(AC){
     const bus=spatial(pos,0.5),t=AC.currentTime;
     tone(t,bus,{type:'sine',f:70,f2:28,dur:0.55,vol:0.9,a:0.005});
@@ -1981,7 +2044,8 @@ function dmPlayAirstrike(pts){
   bigMsg('공습 경보!','amber',2.2);
   dmAirstrikeSiren();
   const doDamage=G.net.mode!=='client';
-  pts.forEach((p,i)=>schedule(1.8+i*0.22,()=>dmExplodeAt(p,doDamage)));
+  // each bomb visibly falls from high overhead and only explodes once it actually lands
+  pts.forEach((p,i)=>dropBomb(p.x,p.z,dmGroundY(p.x),1.2+i*0.16,()=>dmExplodeAt(p,doDamage)));
 }
 function dmCheckAirstrike(){
   const tier=Math.floor(Math.max(DM.score[0],DM.score[1])/10);
@@ -2378,7 +2442,13 @@ function updatePlayer(dt){
   if(keys.ArrowUp)p.pitch=clamp(p.pitch+turn*0.7*dt,-1.35,1.25); if(keys.ArrowDown)p.pitch=clamp(p.pitch-turn*0.7*dt,-1.35,1.25);
   if(pressed.has('KeyM')){
     G.bigmap=!G.bigmap;$('bigmap').hidden=!G.bigmap;
-    if(G.dm){ document.body.classList.toggle('dmSplit',G.bigmap); $('dmWeap').hidden=!G.bigmap; if(G.bigmap) renderDMWeap(); }
+    if(G.dm){
+      document.body.classList.toggle('dmSplit',G.bigmap); $('dmWeap').hidden=!G.bigmap; if(G.bigmap) renderDMWeap();
+      // the weapon-swap panel has real buttons to click - pointer lock hides the cursor and eats
+      // clicks as look input, so release it while the panel is open and re-engage on close
+      if(G.bigmap){ mouse.left=mouse.right=false; if(document.pointerLockElement)document.exitPointerLock(); }
+      else if(!G.noLock&&!touchUIOn) requestLock();
+    }
   }
   if(pressed.has('KeyV'))G.fp=!G.fp;
   p.bloom=Math.max(0,p.bloom-dt*0.05);

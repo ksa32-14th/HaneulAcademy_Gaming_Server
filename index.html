@@ -537,7 +537,13 @@ function P(g,c,x,y,z,rx){const m=M(g,c,x,y,z);if(rx)m.rotation.x=rx;return m;}
 // 5:3 rectangle, long axis along X - each team spawns from a bunker on a short (Z) edge and fights
 // down the long lane. Much smaller than the old 420x420 square so AR/DMR fights actually happen
 // instead of everyone wandering for a minute before finding anyone.
-const DM_OX=6000,DM_OZ=0,DM_HALF_X=60,DM_HALF_Z=48,DM_GROUND=0;
+// DM_HALF_X hugs the true outermost structure on the X (left-right) axis exactly: the tall boundary
+// wall built right behind each team's MG bunker (see buildDeathmatchMap) sits at
+// BASE_DX(48) + bunker half-width(6) + stair gap(0.55) + stair run(13*0.3=3.9) + 0.8 + wall
+// thickness(2.5) = 61.75 from centre - no leftover hillside past it any more. DM_HALF_Z is pulled in
+// to match too, just past the outermost Z-direction cover (the two centreline HESCO segments
+// reaching to +-40 - see buildDeathmatchMap), rather than the old arbitrary 48.
+const DM_OX=6000,DM_OZ=0,DM_HALF_X=61.75,DM_HALF_Z=42,DM_GROUND=0;
 function inDM(x,z){return Math.abs(x-DM_OX)<DM_HALF_X&&Math.abs(z-DM_OZ)<DM_HALF_Z;}
 // elevation profile along the long axis: a flat basin down the middle (original size, with its own
 // buildings/sandbags) and each village sitting up on a flat plateau - height only depends on
@@ -1583,11 +1589,14 @@ const WEAPONS={
   // Deathmatch-exclusive (not in WEIGHTS, so it never turns up in battle royale loot)
   MK14:  {name:'MK14',  ammo:'7.62',dmg:48,rpm:280,auto:false,mag:16,spread:0.024,reload:2.8,range:450,zoom:4,  pellets:1,recoil:0.055,hz:0.4,muz:0.98,rank:5,kind:'dmr',scope:true},
   // mounted hilltop MG (deathmatch only, see DM_MGS/mountMG): never lootable, always installed into
-  // whichever slot the player was holding while they mount it. Tight spread even from the hip since
-  // it's tripod-stabilised, and default-aimed (mountMG forces G.ads) on top of that; holding right-
-  // click on top of that engages aimScope for an actual zoomed-in view of the aim point (no scope
-  // overlay - it has no scope:true - just the FOV zoom, same mechanism as every other weapon's ADS).
-  MG:    {name:'저지기관총',ammo:'MG',dmg:38,rpm:650,auto:true,mag:50,spread:0.017,reload:4.5,range:500,zoom:2.5,pellets:1,recoil:0.02,hz:0.3,muz:1.05,rank:5,kind:'mg',mounted:true},
+  // whichever slot the player was holding while they mount it. A 저지기관총 (suppression gun) is
+  // meant to hose down an area up close, not snipe with it - wide hip-fire spread on purpose, so
+  // it stays a close/mid-range area-denial weapon instead of doubling as a long-range laser just
+  // because it has 500 range on paper. Default-aimed (mountMG forces G.ads) softens that some;
+  // holding right-click on top of that engages aimScope for an actual zoomed-in view of the aim
+  // point (no scope overlay - it has no scope:true - just the FOV zoom, same mechanism as every
+  // other weapon's ADS), but the spread itself barely tightens even then.
+  MG:    {name:'저지기관총',ammo:'MG',dmg:38,rpm:650,auto:true,mag:50,spread:0.062,reload:4.5,range:500,zoom:2.5,pellets:1,recoil:0.028,hz:0.3,muz:1.05,rank:5,kind:'mg',mounted:true},
 };
 const WEIGHTS=[['UMP45',20],['M416',17],['AKM',19],['S686',15],['P92',15],['Kar98k',24]];
 const AMMO_COL={'9mm':0xe8c35a,'5.56':0x7fc65a,'7.62':0xe0873a,'12G':0xcc4b45,'MG':0x9aa0a6};
@@ -2186,7 +2195,7 @@ function tryFire(a,dir,origin){
     const maxT=def.range*2.2;
     const h=rayCast(o,_d,maxT,a);
     _hp.copy(o).addScaledVector(_d,h.t);
-    if(!isSniper&&p<3) addTracer(o,_hp);
+    if(!isSniper&&p<3&&!a.isPlayer) addTracer(o,_hp);
     // supersonic crack when an enemy round passes close to the player's head (delayed to match
     // arrival for a sniper round still visibly in flight; instant for hitscan weapons)
     if(!a.isPlayer&&p===0&&player&&player.alive&&h.actor!==player){
@@ -2327,7 +2336,12 @@ function dmRespawn(a){ dmPlaceAtSpawn(a); }
 // approach ~0.9 units, to the gun body's edge).
 const MG_SEAT_OFS=1.35;
 const MG_CAM_RISE=1.32;
-const _mgCamP=new V3();
+// the gunner's actual body (a.pos - what the mesh renders at AND what hit detection uses) has to
+// stay down at roof/ground level, not up at the camera's eye height - it only follows the mount's
+// YAW (so it turns to face wherever the gunner is looking), never the PITCH (a seated body doesn't
+// bob up/down/forward just because the barrel tilts), unlike the camera above.
+const MG_BODY_RISE=0.05;
+const _mgCamP=new V3(),_mgBodyP=new V3();
 // how far the gun can swing each way (yaw) from the mount's own facing before it's clamped. Without
 // a limit, looking far enough around swings the barrel/receiver close enough to the fixed camera
 // spot behind it to fill the whole view - a real tripod gun has a limited traverse arc for exactly
@@ -2366,8 +2380,10 @@ function mountMG(p,mg){
   if(mg.gunMesh){
     mg.gunMesh.rotation.set(0,0,0);
     mg.gunMesh.updateMatrixWorld(true);
+    mg.gunMesh.localToWorld(_mgBodyP.set(0,MG_BODY_RISE,-MG_SEAT_OFS));
+    p.pos.copy(_mgBodyP);
     mg.gunMesh.localToWorld(_mgCamP.set(0,MG_CAM_RISE,-MG_SEAT_OFS));
-    p.pos.copy(_mgCamP);
+    p.mgEye=(p.mgEye||new V3()).copy(_mgCamP);
   }
 }
 function dismountMG(p){
@@ -2888,10 +2904,10 @@ function applyLook(dt){
   G.lookX-=ax;G.lookY-=ay;
 }
 function updatePlayer(dt){
-  const p=player; if(!p.alive) return;
-  const turn=G.scoped?0.5:1.8;
-  if(keys.ArrowLeft)p.yaw+=turn*dt; if(keys.ArrowRight)p.yaw-=turn*dt;
-  if(keys.ArrowUp)p.pitch=clamp(p.pitch+turn*0.7*dt,-1.35,1.25); if(keys.ArrowDown)p.pitch=clamp(p.pitch-turn*0.7*dt,-1.35,1.25);
+  const p=player;
+  // M (map+scoreboard) has to work while dead too - spectating the match from above is no good if
+  // you can't pull the map up to see where the fight actually is - so this reads before the alive
+  // check below, same as Tab (handled entirely separately, up in the keydown listener) already did.
   if(pressed.has('KeyM')){
     G.bigmap=!G.bigmap;$('bigmap').hidden=!G.bigmap;
     if(G.dm){
@@ -2902,6 +2918,10 @@ function updatePlayer(dt){
       else if(!G.noLock&&!touchUIOn) requestLock();
     }
   }
+  if(!p.alive) return;
+  const turn=G.scoped?0.5:1.8;
+  if(keys.ArrowLeft)p.yaw+=turn*dt; if(keys.ArrowRight)p.yaw-=turn*dt;
+  if(keys.ArrowUp)p.pitch=clamp(p.pitch+turn*0.7*dt,-1.35,1.25); if(keys.ArrowDown)p.pitch=clamp(p.pitch-turn*0.7*dt,-1.35,1.25);
   // third person is no longer supported - V is now the switchable-scope toggle for weapons that
   // carry one (UMP45's 3x on top of its dot sight)
   if(pressed.has('KeyV')){
@@ -2996,10 +3016,17 @@ function updatePlayer(dt){
     p.yaw=p.mg.yaw+clamp(angDiff(p.mg.yaw,p.yaw),-MG_TRAVERSE,MG_TRAVERSE);
     p.pitch=clamp(p.pitch,-MG_PITCH_LIMIT,MG_PITCH_LIMIT);
     if(p.mg.gunMesh){
-      p.mg.gunMesh.rotation.y=p.yaw-p.mg.yaw;p.mg.gunMesh.rotation.x=-p.pitch;
+      p.mg.gunMesh.rotation.y=p.yaw-p.mg.yaw;
+      // body (a.pos) reads with pitch zeroed out first - it only turns with yaw, never tilts with
+      // the barrel's elevation, or the seated character would float/dive as the gun aims up/down
+      p.mg.gunMesh.rotation.x=0;
+      p.mg.gunMesh.updateMatrixWorld(true);
+      p.mg.gunMesh.localToWorld(_mgBodyP.set(0,MG_BODY_RISE,-MG_SEAT_OFS));
+      p.pos.copy(_mgBodyP);
+      p.mg.gunMesh.rotation.x=-p.pitch;
       p.mg.gunMesh.updateMatrixWorld(true);
       p.mg.gunMesh.localToWorld(_mgCamP.set(0,MG_CAM_RISE,-MG_SEAT_OFS));
-      p.pos.copy(_mgCamP);
+      p.mgEye=(p.mgEye||new V3()).copy(_mgCamP);
     }
     p.vy=0;p.onGround=true;
   }
@@ -3271,9 +3298,9 @@ function dmBotWander(b){
       B.urgent=true;
       return;
     }
-  } else if(b.dmRole==='mg'&&Math.random()<0.15){
-    // only the bot actually assigned to the gun bothers going for it, and goes for it hard - one
-    // dedicated MG gunner per team, not a coin-flip among all of them
+  } else if(b.dmRole==='mg'){
+    // the bot assigned to the gun beelines for it every time it's free and it's idle, instead of a
+    // coin-flip that left the MG sitting empty for long stretches
     const mg=DM_MGS.find(m=>m.team===b.team&&!m.occupant);
     if(mg){ B.mgTarget=mg; setGoal(b,mg.x,mg.z,'mg'); if(mg.stairBase) B.path.unshift({x:mg.stairBase.x,z:mg.stairBase.z}); B.urgent=true; return; }
   }
@@ -3357,10 +3384,15 @@ function updateBot(b,dt){
     b.yaw=b.mg.yaw+clamp(angDiff(b.mg.yaw,b.yaw),-MG_TRAVERSE,MG_TRAVERSE);
     b.pitch=clamp(b.pitch,-MG_PITCH_LIMIT,MG_PITCH_LIMIT);
     if(b.mg.gunMesh){
-      b.mg.gunMesh.rotation.y=b.yaw-b.mg.yaw;b.mg.gunMesh.rotation.x=-b.pitch;
+      // body point read with pitch zeroed first (yaw-only - never floats/dives with the barrel's
+      // elevation), then pitch applied afterward so the visible gun model still tilts normally for
+      // anyone watching this bot aim
+      b.mg.gunMesh.rotation.y=b.yaw-b.mg.yaw;b.mg.gunMesh.rotation.x=0;
       b.mg.gunMesh.updateMatrixWorld(true);
-      b.mg.gunMesh.localToWorld(_mgCamP.set(0,MG_CAM_RISE,-MG_SEAT_OFS));
-      b.pos.copy(_mgCamP);
+      b.mg.gunMesh.localToWorld(_mgBodyP.set(0,MG_BODY_RISE,-MG_SEAT_OFS));
+      b.pos.copy(_mgBodyP);
+      b.mg.gunMesh.rotation.x=-b.pitch;
+      b.mg.gunMesh.updateMatrixWorld(true);
     }
     b.vy=0;b.onGround=true;
   }
@@ -3803,22 +3835,39 @@ function clampEye(p,pos){
   return pos;
 }
 function updateCamera(dt){
-  const p=player,yaw=p.yaw,pitch=p.pitch;
+  const p=player;
+  if(!p.alive){
+    // dead: a slow-tracking bird's-eye view of the ongoing fight instead of idling near your own
+    // corpse - averages every currently-living actor's ground position so it follows the action
+    // wherever it is, then eases toward that point rather than snapping straight to it every frame.
+    let sx=0,sz=0,n=0;
+    for(const a of actors){ if(a.alive&&(a.state==='ground'||a.state==='chute')){sx+=a.pos.x;sz+=a.pos.z;n++;} }
+    const cx=n?sx/n:p.pos.x, cz=n?sz/n:p.pos.z;
+    if(G.spectX===undefined){G.spectX=cx;G.spectZ=cz;}
+    G.spectX=lerp(G.spectX,cx,Math.min(1,dt*0.6));G.spectZ=lerp(G.spectZ,cz,Math.min(1,dt*0.6));
+    const ht=G.dm?58:80;
+    camera.position.set(G.spectX,heightAt(G.spectX,G.spectZ)+ht,G.spectZ);
+    camera.rotation.set(-Math.PI/2,0,0);
+    camera.fov=lerp(camera.fov,68,Math.min(1,dt*6));camera.updateProjectionMatrix();
+    sky.position.copy(camera.position);
+    return;
+  }
+  const yaw=p.yaw,pitch=p.pitch;
   _dir.set(-Math.sin(yaw)*Math.cos(pitch),Math.sin(pitch),-Math.cos(yaw)*Math.cos(pitch));
   _right.set(Math.cos(yaw),0,-Math.sin(yaw));
   let dist,sh=0.55,up=0.3,fov=72;
   if(p.state==='plane'){_tgt.copy(plane.pos);dist=36;sh=0;up=4;}
   else if(p.state==='fall'||p.state==='chute'){_tgt.set(p.pos.x,p.pos.y+1.4,p.pos.z);dist=p.state==='chute'?10:6.5;sh=0;up=p.state==='chute'?1.8:0.8;}
-  else if(!p.alive){_tgt.set(p.pos.x,p.pos.y+0.6,p.pos.z);dist=4.5;sh=0;up=1.5;}
   p.eyeH=lerp(p.eyeH||1.62,p.inWater?1.2:ST(p).eye,Math.min(1,dt*9));
   const ln=p.lean||0,prone=p.stance==='prone';
   if(p.state==='ground'&&p.alive){
     // prone: eye sits forward of the body centre
     const fo=prone?0.72:0;
-    // mounted MG: p.pos IS already the intended eye point (it rides along with the gun in its own
-    // local space, see MG_SEAT_OFS/MG_CAM_RISE and the p.mg block in updatePlayer) - unlike the
-    // normal standing/crouching case, no separate eyeH lift on top of a body-centre position needed.
-    if(p.mg){_tgt.copy(p.pos);}
+    // mounted MG: p.pos is now the seated body's own ground-level point (so the character renders
+    // and gets shot at properly seated, not floating at eye height) - the camera instead reads the
+    // separate p.mgEye point, which still rides along with the gun in its own local space including
+    // pitch (see MG_SEAT_OFS/MG_CAM_RISE and the p.mg block in updatePlayer).
+    if(p.mg){_tgt.copy(p.mgEye||p.pos);}
     else _tgt.set(p.pos.x-Math.sin(yaw)*fo+_right.x*ln*0.4,p.pos.y+p.eyeH-0.05-Math.abs(ln)*0.06,p.pos.z-Math.cos(yaw)*fo+_right.z*ln*0.4);
     clampEye(p,_tgt);
     dist=G.ads?1.2:prone?2.3:2.7;sh=(G.ads?0.42:0.55)+ln*0.25;

@@ -496,25 +496,24 @@ function P(g,c,x,y,z,rx){const m=M(g,c,x,y,z);if(rx)m.rotation.x=rx;return m;}
 // 5:3 rectangle, long axis along X - each team spawns from a bunker on a short (Z) edge and fights
 // down the long lane. Much smaller than the old 420x420 square so AR/DMR fights actually happen
 // instead of everyone wandering for a minute before finding anyone.
-const DM_OX=6000,DM_OZ=0,DM_HALF_X=88,DM_HALF_Z=48,DM_GROUND=0;
+const DM_OX=6000,DM_OZ=0,DM_HALF_X=80,DM_HALF_Z=48,DM_GROUND=0;
 function inDM(x,z){return Math.abs(x-DM_OX)<DM_HALF_X&&Math.abs(z-DM_OZ)<DM_HALF_Z;}
-// elevation profile along the long axis: a flat basin down the middle, each village sitting up on
-// a flat plateau, and a taller (also flat-topped) hill behind each team's bunker to shoot down into
-// the valley from - height only depends on distance from centre (uniform across Z), like a simple
-// cross-section. The three bands (plateau/ramp/hilltop) all have generous flat margin around
-// whatever sits on them (village loop, bunker, hilltop sandbags) - a flat-bottomed box straddling a
-// ramp used to sit half-buried/half-floating where the real ground height under it didn't match the
-// single height sampled at its centre. The hilltop band used to be only 2 units wide (barely past
-// the mountain boundary) so there was no real room to stand on it; it's now a full 16-unit-deep
-// firing position behind each bunker.
+// elevation profile along the long axis: a flat basin down the middle (kept at its original size -
+// this is the main fighting floor), each village sitting up on a flat plateau, and a taller
+// (also flat-topped) hill behind each team's bunker with a small mounted-MG pocket on it - height
+// only depends on distance from centre (uniform across Z), like a simple cross-section. The plateau
+// and hilltop bands were both trimmed down from an earlier pass (the hilltop used to be a full open
+// 16-unit firing field; now it's walled down to a small nook around the MG, so it never needed that
+// much raw space to begin with). Ramp bands stay clear of anything flat-bottomed sitting on them - a
+// box straddling a slope sits half-buried/half-floating since it only samples height at its centre.
 const DM_SLOPE1=[21,29]; // basin -> plateau ramp, in |local x| - village placement skips this band
 function dmTerrainH(lx){
   const ax=Math.min(Math.abs(lx),DM_HALF_X);
   if(ax<DM_SLOPE1[0]) return 0;
   if(ax<DM_SLOPE1[1]) return lerp(0,4,smooth(DM_SLOPE1[0],DM_SLOPE1[1],ax));
-  if(ax<64) return 4;                              // plateau: village range plus the bunker, flat
-  if(ax<72) return lerp(4,12,smooth(64,72,ax));     // hill ramp, well past the bunker - nothing sits here
-  return 12;                                         // hilltop: a real flat firing position, not a sliver
+  if(ax<56) return 4;                              // plateau: village range plus the bunker, flat
+  if(ax<62) return lerp(4,12,smooth(56,62,ax));     // hill ramp, well past the bunker - nothing sits here
+  return 12;                                         // hilltop: small walled MG nook, see buildDeathmatchMap
 }
 function dmGroundY(x){ return DM_GROUND+dmTerrainH(x-DM_OX); }
 // ---------- terrain
@@ -1248,11 +1247,11 @@ function buildDeathmatchMap(){
   // rusted shipping containers and stacked sandbag firing walls, packed tightly (not a tidy town,
   // and never a gable roof in sight) so every lane is close-quarters cover-to-cover fighting,
   // "The Outpost"-style.
-  const BASE_DX=54; // local x offset of each team's base from arena centre - bunker (half-width 6)
-                     // sits at 48-60, well inside the flat plateau (29-64) with margin either side
+  const BASE_DX=48; // local x offset of each team's base from arena centre - bunker (half-width 6)
+                     // sits at 42-54, well inside the flat plateau (29-56) with margin either side
   for(const rz of [-32,-16,0,16,32]){
-    let x=-40;
-    while(x<40){
+    let x=-36;
+    while(x<36){
       // skip the basin->plateau ramp entirely - a flat-bottomed box straddling sloped ground is
       // what caused the "sinking/floating" look reported on the hill ramp, so nothing at all gets
       // placed on either ramp (this one, or the hill ramp past the bunker - see dmTerrainH)
@@ -1314,26 +1313,39 @@ function buildDeathmatchMap(){
     return {x:bx,z:bz};
   }
   DM_BUNKERS=[bunker(-BASE_DX,0),bunker(BASE_DX,1)];
-  // hilltop firing positions: a proper little firebase behind each base (was just two short sandbag
-  // runs and the gun, which read as barren) so the new elevated ground actually feels like somewhere
-  // to hold, not empty high ground - a mounted MG at the centre (F to use, see mountMG/updatePlayer),
-  // a HESCO backstop behind it, and a container flanking each side further out
+  // hilltop MG nook: a small walled pocket behind each base, not a wide-open firing field - the
+  // hilltop terrain band itself is only 16 units deep now, and cap walls (spanning that whole depth
+  // at z=+-9) seal off everything except this pocket, so there's nowhere to wander on the hill
+  // besides the gun position itself.
   DM_MGS=[];
   for(const side of [-1,1]){
-    const hx=DM_OX+side*80,gy=dmGroundY(hx),yaw=side<0?Math.PI/2:-Math.PI/2;
-    sandbagRun('z',hx,DM_OZ-15,DM_OZ-4,1.5,gy);
-    sandbagRun('z',hx,DM_OZ+4,DM_OZ+15,1.5,gy);
-    bigWall('z',hx+side*7,DM_OZ-6,DM_OZ+6,3,gy);
-    container(hx+side*2,DM_OZ-24,Math.floor(srand()*2),gy);
-    container(hx-side*2,DM_OZ+24,Math.floor(srand()*2),gy);
-    const grp=new THREE.Group(),legCol=0x2c2e2a,gunCol=0x23272b;
+    const hx=DM_OX+side*71,gy=dmGroundY(hx),yaw=side<0?Math.PI/2:-Math.PI/2;
+    const capX0=DM_OX+side*62,capX1=DM_OX+side*80;
+    bigWall('x',DM_OZ-9,Math.min(capX0,capX1),Math.max(capX0,capX1),3.4,gy);
+    bigWall('x',DM_OZ+9,Math.min(capX0,capX1),Math.max(capX0,capX1),3.4,gy);
+    sandbagRun('z',hx,DM_OZ-7,DM_OZ-2.5,1.6,gy);
+    sandbagRun('z',hx,DM_OZ+2.5,DM_OZ+7,1.6,gy);
+    bigWall('z',hx+side*5.5,DM_OZ-8,DM_OZ+8,3.2,gy);
+    // a heavier, more detailed tripod gun than before: cooling-jacketed barrel with a muzzle brake,
+    // a small gun shield, spade grips, an ammo box on the side, and an actual seat behind it (the
+    // gunner sits, doesn't stand) instead of six plain boxes that read as a toy
+    const grp=new THREE.Group(),legCol=0x24261f,gunCol=0x1c1f1c,metalCol=0x3a3d38,woodCol=0x4a3b28;
     grp.add(
-      P(gB(.05,.9,.05),legCol,0,.45,-.35,0.35),
-      P(gB(.05,.9,.05),legCol,-.3,.45,.2,-0.5),
-      P(gB(.05,.9,.05),legCol,.3,.45,.2,-0.5),
-      P(gB(.14,.16,1.1),gunCol,0,.95,.1),
-      P(gC(.035,.7),gunCol,0,.98,.75),
-      P(gB(.16,.2,.22),0x3b4147,.16,.9,.2)
+      P(gB(.09,1.05,.09),legCol,0,.5,-.5,0.4),
+      P(gB(.09,1.05,.09),legCol,-.45,.5,.35,-0.55),
+      P(gB(.09,1.05,.09),legCol,.45,.5,.35,-0.55),
+      P(gB(.32,.04,.32),legCol,0,.06,0),
+      P(gC(.09,.36),metalCol,0,1.05,0,1.5708),
+      P(gB(.22,.22,1.0),gunCol,0,1.15,.15),
+      P(gC(.08,.5),metalCol,0,1.15,.55),
+      P(gC(.032,.55),gunCol,0,1.15,1.05),
+      P(gC(.05,.09),metalCol,0,1.15,1.32),
+      P(gB(.05,.16,.05),woodCol,-.14,.95,-.32,0.3),
+      P(gB(.05,.16,.05),woodCol,.14,.95,-.32,-0.3),
+      P(gB(.5,.32,.03),metalCol,0,1.3,-.02),
+      P(gB(.16,.2,.24),0x33361f,.24,1.05,.05),
+      P(gC(.16,.05),woodCol,0,.62,-.72,1.5708),
+      P(gB(.04,.55,.04),legCol,0,.34,-.72)
     );
     grp.position.set(hx,gy,DM_OZ);grp.rotation.y=yaw;
     grp.traverse(m=>{if(m.isMesh){m.castShadow=true;m.receiveShadow=true;}});
@@ -2130,18 +2142,26 @@ function dmPlaceAtSpawn(a){
   if(!a.isPlayer&&a.brain){a.brain.target=null;a.brain.path=[];a.brain.mode='none';}
 }
 function dmRespawn(a){ dmPlaceAtSpawn(a); }
-// mounted hilltop MG (deathmatch, player only): F to mount/dismount. Installs the MG into whatever
+// mounted hilltop MG (deathmatch, player or bot): F to mount/dismount. Installs the MG into whatever
 // slot was current (restored on dismount), with its own 'MG' ammo pool set to Infinity so the
 // existing mag/reload system just works unmodified - 50 rounds (WEAPONS.MG.mag) per belt, reload
-// via the normal R key once it runs dry. updatePlayer forces G.ads while mounted (always-aimed) and
-// locks position/movement; see the "mounted MG" block there.
+// via the normal R key once it runs dry. updatePlayer/updateBot force aim and lock position/movement
+// while mounted; stance is forced to 'crouch' (closest of the three real stances to a gunner seated
+// low behind the gun - there's no dedicated seated pose). If a bot is already on it and a human
+// player walks up wanting it, the bot is evicted first - AI doesn't get to hog it from a real player,
+// but a human on it never gets kicked off by anyone.
 function mountMG(p,mg){
-  if(!mg||mg.occupant||p.mg) return;
+  if(!mg||p.mg) return;
+  if(mg.occupant){
+    if(mg.occupant===p) return;
+    if(mg.occupant.human||mg.occupant.isPlayer) return;   // occupied by a real person - can't take it
+    dismountMG(mg.occupant);
+  }
   mg.occupant=p; p.mg=mg;
   p.mgPrevSlot=p.slots[p.cur];
   p.slots[p.cur]={key:'MG',mag:WEAPONS.MG.mag};
   p.ammo.MG=Infinity;
-  p.pos.set(mg.x,mg.y,mg.z); p.yaw=mg.yaw; p.pitch=0; p.stance='stand'; p.vy=0; p.onGround=true; p.reloadT=0;
+  p.pos.set(mg.x,mg.y,mg.z); p.yaw=mg.yaw; p.pitch=0; p.stance='crouch'; p.vy=0; p.onGround=true; p.reloadT=0;
 }
 function dismountMG(p){
   const mg=p.mg; if(!mg) return;
@@ -2665,7 +2685,7 @@ function updatePlayer(dt){
     if(!p.mg){
       let best=null,bd=9;
       for(const mg of DM_MGS){
-        if(mg.occupant) continue;
+        if(mg.occupant&&(mg.occupant.human||mg.occupant.isPlayer)) continue;   // a real person is on it - not takeable
         const d=Math.hypot(p.pos.x-mg.x,p.pos.z-mg.z);
         if(d<3&&d<bd){bd=d;best=mg;}
       }
@@ -3017,7 +3037,10 @@ function updateBot(b,dt){
         const o=muzzleOf(b,new V3());
         const tst=ST(t),hf=t.stance==='prone'&&head?0.78:0;
         const dir=new V3(t.pos.x-Math.sin(t.yaw)*hf-o.x,t.pos.y+(head?tst.head:tst.chest)-o.y,t.pos.z-Math.cos(t.yaw)*hf-o.z);const dist=dir.length();dir.divideScalar(dist);
-        const err=(0.016+0.03*(1-b.skill))*(1+dist/90)*B.warm*(t.moveSpeed>2?1.3:1)*(b.moveSpeed>1?1.15:1);
+        // deathmatch's redesigned arena regularly puts fights at 80-150m - the BR-tuned distance
+        // penalty (doubling error by ~90m) made bots essentially harmless past mid-range there, so
+        // it grows much more slowly in DM instead of carrying the BR value over unchanged
+        const err=(0.016+0.03*(1-b.skill))*(1+dist/(G.dm?220:90))*B.warm*(t.moveSpeed>2?1.3:1)*(b.moveSpeed>1?1.15:1);
         dir.x+=gauss()*err;dir.y+=gauss()*err*0.6;dir.z+=gauss()*err;dir.normalize();
         if(tryFire(b,dir,o)){
           const def=WEAPONS[b.weapon().key];
@@ -3296,7 +3319,7 @@ function updateHUD(dt){
     if(p.state==='plane')pr='<kbd>F</kbd>낙하';
     else if(p.state==='fall')pr='<kbd>F</kbd>낙하산';
     else if(p.mg)pr='<kbd>F</kbd>기관총에서 내려오기';
-    else if(G.nearMG)pr='<kbd>F</kbd>기관총 사용';
+    else if(G.nearMG)pr=G.nearMG.occupant?'<kbd>F</kbd>기관총 교대':'<kbd>F</kbd>기관총 사용';
     else if(G.nearLoot)pr=`<kbd>F</kbd>${esc(lootLabel(G.nearLoot))}`;
   }
   setHTML(hud.prompt,'prompt',pr);hud.prompt.hidden=!pr||G.invOpen;

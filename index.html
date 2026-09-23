@@ -180,30 +180,30 @@ button.go.small{padding:9px 18px;font-size:13px;letter-spacing:.08em}
    and the minimap itself opens the full map (no separate map button). */
 #touchCtl{position:absolute;inset:0}
 #tLook{position:absolute;inset:0;pointer-events:auto;touch-action:none}
-#tStick{position:absolute;left:34px;bottom:34px;width:132px;height:132px;border-radius:50%;background:rgba(236,239,230,.08);border:1px solid var(--line);pointer-events:auto;touch-action:none}
+#tStick{position:absolute;left:58px;bottom:58px;width:132px;height:132px;border-radius:50%;background:rgba(236,239,230,.08);border:1px solid var(--line);pointer-events:auto;touch-action:none}
 #tStickNub{position:absolute;left:50%;top:50%;width:56px;height:56px;margin:-28px 0 0 -28px;border-radius:50%;background:rgba(242,179,61,.5);border:1px solid rgba(242,179,61,.8);transition:transform .05s linear}
 #tStickNub.sprint{background:rgba(255,140,61,.75);border-color:rgba(255,170,61,.95)}
 .tbtn{pointer-events:auto;touch-action:none;-webkit-user-select:none;user-select:none;font-family:var(--disp);font-weight:700;font-size:11.5px;letter-spacing:.02em;width:54px;height:54px;border-radius:50%;background:rgba(10,15,19,.55);border:1px solid var(--line);color:var(--text);display:flex;align-items:center;justify-content:center;text-align:center;line-height:1.1;-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);position:absolute}
 .tbtn:active{background:rgba(242,179,61,.35);border-color:rgba(242,179,61,.7)}
-#tFire{width:88px;height:88px;font-size:14px;background:rgba(255,75,62,.26);border-color:rgba(255,75,62,.6);right:30px;bottom:30px}
+#tFire{width:88px;height:88px;font-size:14px;background:rgba(255,75,62,.26);border-color:rgba(255,75,62,.6);right:54px;bottom:54px}
 #tFire:active{background:rgba(255,75,62,.5)}
-#tPause{width:40px;height:40px;font-size:15px;top:240px;right:24px}
+#tPause{width:40px;height:40px;font-size:15px;top:240px;right:38px}
 /* left thumb cluster */
-#tFire2{width:52px;height:52px;font-size:12px;top:20px;left:20px;background:rgba(255,75,62,.2);border-color:rgba(255,75,62,.55)}
+#tFire2{width:52px;height:52px;font-size:12px;top:20px;left:34px;background:rgba(255,75,62,.2);border-color:rgba(255,75,62,.55)}
 #tFire2:active{background:rgba(255,75,62,.45)}
-#tLean{position:absolute;left:34px;bottom:194px;width:132px;display:flex;justify-content:space-between}
+#tLean{position:absolute;left:50px;bottom:218px;width:148px;display:flex;justify-content:space-between}
 #tLean .tbtn{position:static;width:56px;height:40px;border-radius:10px;font-size:16px}
-#tLeftAux{position:absolute;left:180px;bottom:34px;display:flex;flex-direction:column;gap:10px}
+#tLeftAux{position:absolute;left:204px;bottom:58px;display:flex;flex-direction:column;gap:14px}
 #tLeftAux .tbtn{position:static;width:52px;height:52px;font-size:10.5px}
 /* right thumb cluster: fire anchored bottom-right; scope/jump/crouch stack directly left of it
    (scope above jump above crouch) with prone and reload one column further out */
 #tButtons{position:absolute;inset:0;pointer-events:none}
 #tButtons .tbtn{pointer-events:auto}
-#tScope{width:52px;height:52px;right:128px;bottom:172px;font-size:10.5px}
-#tJump{width:52px;height:52px;right:128px;bottom:110px;font-size:11px}
-#tCrouch{width:52px;height:52px;right:128px;bottom:48px;font-size:10px}
-#tProne{width:50px;height:50px;right:190px;bottom:110px;font-size:10px}
-#tReload{width:50px;height:50px;right:190px;bottom:48px;font-size:10.5px}
+#tScope{width:52px;height:52px;right:152px;bottom:212px;font-size:10.5px}
+#tJump{width:52px;height:52px;right:152px;bottom:142px;font-size:11px}
+#tCrouch{width:52px;height:52px;right:152px;bottom:72px;font-size:10px}
+#tProne{width:50px;height:50px;right:222px;bottom:142px;font-size:10px}
+#tReload{width:50px;height:50px;right:222px;bottom:72px;font-size:10.5px}
 #tPause,#tFire2{position:absolute}
 /* deathmatch: M opens the map on the left half and a weapon-swap panel on the right half */
 body.dmSplit #bigmap{left:27vw}
@@ -214,11 +214,11 @@ body.dmSplit #bigmap{left:27vw}
 #dmWeap .invList button.sel{background:rgba(242,179,61,.2);border-color:rgba(242,179,61,.75)}
 /* the joystick/lean sit where #meds normally does, and weapons move up above the HP bar, clear of
    both the left stick cluster and the right scope/jump/crouch column */
-body.touch #meds{bottom:250px}
-body.touch #weapons{position:absolute;left:50%;right:auto;bottom:84px;transform:translateX(-50%);flex-direction:row;gap:6px;max-width:min(230px,30vw);pointer-events:auto}
+body.touch #meds{bottom:270px}
+body.touch #weapons{position:absolute;left:50%;right:auto;bottom:94px;transform:translateX(-50%);flex-direction:row;gap:6px;max-width:min(200px,28vw);pointer-events:auto;z-index:5}
 body.touch .wslot{min-width:0;padding:4px 10px}
 body.touch .wslot .nm{font-size:12px}
-body.touch #minimap{pointer-events:auto;cursor:pointer}
+body.touch #minimap{pointer-events:auto;cursor:pointer;position:relative;z-index:5}
 .toggleRow{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--muted);pointer-events:auto}
 .toggleRow input[type=checkbox]{appearance:none;-webkit-appearance:none;width:38px;height:22px;border-radius:999px;background:rgba(236,239,230,.18);border:1px solid var(--line);position:relative;cursor:pointer;flex:none;margin:0;transition:background .15s}
 .toggleRow input[type=checkbox]::before{content:"";position:absolute;left:2px;top:2px;width:16px;height:16px;border-radius:50%;background:var(--text);transition:transform .15s}
@@ -371,7 +371,7 @@ body.touch #minimap{pointer-events:auto;cursor:pointer}
       </div>
       <p class="note" id="mpCopyMsg">코드나 링크를 친구에게 보내면 바로 함께할 수 있습니다.</p>
       <div id="roomPlayers" class="roomPlayers"></div>
-      <label class="toggleRow" id="mpModeRow"><input type="checkbox" id="mpDM">데스매치 (5v5 고정, 배틀로얄 대신)</label>
+      <label class="toggleRow" id="mpModeRow"><input type="checkbox" id="mpDM">데스매치 (8v8 고정, 배틀로얄 대신)</label>
       <label class="fld" id="totalRow">총 인원 (사람 + 봇)<input id="mpTotal" type="range" min="2" max="50" value="20"><span id="mpTotalOut" class="codeTag">20명</span></label>
       <p class="note" id="mpFillMsg"></p>
       <div class="btnRow">
@@ -466,6 +466,16 @@ function P(g,c,x,y,z,rx){const m=M(g,c,x,y,z);if(rx)m.rotation.x=rx;return m;}
 // instead of everyone wandering for a minute before finding anyone.
 const DM_OX=6000,DM_OZ=0,DM_HALF_X=80,DM_HALF_Z=48,DM_GROUND=0;
 function inDM(x,z){return Math.abs(x-DM_OX)<DM_HALF_X&&Math.abs(z-DM_OZ)<DM_HALF_Z;}
+// elevation profile along the long axis: a basin down the middle, each village sitting up on a
+// plateau, and a taller hill behind each team's bunker to shoot down into the valley from - height
+// only depends on distance from centre (uniform across Z), like a simple cross-section
+function dmTerrainH(lx){
+  const ax=Math.min(Math.abs(lx),DM_HALF_X);
+  if(ax<26) return lerp(0,4,smooth(0,26,ax));
+  if(ax<58) return lerp(4,5,smooth(26,58,ax));
+  return lerp(5,12,smooth(58,DM_HALF_X,ax));
+}
+function dmGroundY(x){ return DM_GROUND+dmTerrainH(x-DM_OX); }
 // ---------- terrain
 const ISLAND_R=285;
 function coastR(a){return ISLAND_R+20*Math.sin(a*3+1.2)+11*Math.sin(a*7+0.3)+6*Math.sin(a*13+2);}
@@ -509,7 +519,7 @@ for(let i=0,tries=0;i<28&&tries<900;tries++){
 }
 TOWNS.forEach(t=>t.h=Math.max(1.6,rawHeight(t.x,t.z)));
 function heightAt(x,z){
-  if(inDM(x,z)) return DM_GROUND;   // deathmatch arena: flat ground, far from the battle royale island
+  if(inDM(x,z)) return dmGroundY(x);   // deathmatch arena: basin-to-hills profile, far from the BR island
   let h=rawHeight(x,z);
   for(const t of TOWNS){const dx=x-t.x,dz=z-t.z;const R=t.r+25;if(dx*dx+dz*dz<R*R){h=lerp(h,t.h,smooth(R,t.r,Math.sqrt(dx*dx+dz*dz)));}}
   return h;
@@ -1061,25 +1071,26 @@ const DM_PROPS=[];
 // shipping container: a plain rust/olive/steel box, the size of a real 20ft container - reads at a
 // glance as "military outpost", not "village house"
 const CONTAINER_COLS=[0xa0522d,0x5f6b4a,0x8a3a3a,0x5a6470,0x707a3a,0x6b6f5a];
-function container(cx,cz,rot){
+function container(cx,cz,rot,base){
+  base=base||0;
   const w=2.44,h=2.6,l=6.1,c=CONTAINER_COLS[Math.floor(srand()*CONTAINER_COLS.length)];
   const e=emitter(cx,cz,rot);
-  e.box(-l/2,0,-w/2,l/2,h,w/2,c);
-  e.box(-l/2-0.05,h-0.14,-w/2-0.05,l/2+0.05,h,w/2+0.05,0x30322c,{collide:false});
+  e.box(-l/2,base,-w/2,l/2,base+h,w/2,c);
+  e.box(-l/2-0.05,base+h-0.14,-w/2-0.05,l/2+0.05,base+h,w/2+0.05,0x30322c,{collide:false});
   const dw=rot%2?w:l,dl=rot%2?l:w;
   DM_PROPS.push({x0:cx-dl/2,x1:cx+dl/2,z0:cz-dw/2,z1:cz+dw/2,type:'container'});
 }
 // sandbag firing wall: short chunky two-tier stack (wide base, narrower top), broken into ~0.9m
 // lumps for a hand-stacked silhouette instead of a smooth wall - vaultable like the other low cover
 const SANDBAG_COLS=[0xb8a077,0xac9468,0xc4ad82,0x9f8a5f];
-function sandbagRun(axis,fixed,a0,a1,h){
-  h=h||1.0; if(Math.abs(a1-a0)<0.4) return;
+function sandbagRun(axis,fixed,a0,a1,h,base){
+  h=h||1.4; base=base||0; if(Math.abs(a1-a0)<0.4) return;
   const put=(p0,p1,y0,y1,d,c)=>axis==='x'?addBox(Math.min(p0,p1),y0,fixed-d,Math.max(p0,p1),y1,fixed+d,c):addBox(fixed-d,y0,Math.min(p0,p1),fixed+d,y1,Math.max(p0,p1),c);
   const n=Math.max(1,Math.round(Math.abs(a1-a0)/0.85));
   for(let i=0;i<n;i++){
     const p0=a0+(a1-a0)*i/n,p1=a0+(a1-a0)*(i+1)/n,col=SANDBAG_COLS[Math.floor(srand()*SANDBAG_COLS.length)];
-    put(p0+0.04,p1-0.04,DM_GROUND,DM_GROUND+h*0.55,0.42,col);
-    put(p0+0.09,p1-0.09,DM_GROUND+h*0.5,DM_GROUND+h,0.34,col);
+    put(p0+0.04,p1-0.04,base,base+h*0.55,0.42,col);
+    put(p0+0.09,p1-0.09,base+h*0.5,base+h,0.34,col);
   }
   const d=0.42;
   DM_PROPS.push(axis==='x'?{x0:Math.min(a0,a1),x1:Math.max(a0,a1),z0:fixed-d,z1:fixed+d,type:'sandbag'}:{x0:fixed-d,x1:fixed+d,z0:Math.min(a0,a1),z1:Math.max(a0,a1),type:'sandbag'});
@@ -1088,11 +1099,11 @@ function sandbagRun(axis,fixed,a0,a1,h){
 // wall type, chest-to-head high and NOT vaultable, for places that should really break sightlines
 // rather than just offer crouch cover
 const HESCO_COLS=[0x9f9376,0x8f8469,0xa89b7c];
-function bigWall(axis,fixed,a0,a1,h){
-  h=h||2.1; if(Math.abs(a1-a0)<0.4) return;
+function bigWall(axis,fixed,a0,a1,h,base){
+  h=h||2.6; base=base||0; if(Math.abs(a1-a0)<0.4) return;
   const d=0.5,col=HESCO_COLS[Math.floor(srand()*HESCO_COLS.length)];
-  if(axis==='x') addBox(Math.min(a0,a1),DM_GROUND,fixed-d,Math.max(a0,a1),DM_GROUND+h,fixed+d,col);
-  else addBox(fixed-d,DM_GROUND,Math.min(a0,a1),fixed+d,DM_GROUND+h,Math.max(a0,a1),col);
+  if(axis==='x') addBox(Math.min(a0,a1),base,fixed-d,Math.max(a0,a1),base+h,fixed+d,col);
+  else addBox(fixed-d,base,Math.min(a0,a1),fixed+d,base+h,Math.max(a0,a1),col);
   DM_PROPS.push(axis==='x'?{x0:Math.min(a0,a1),x1:Math.max(a0,a1),z0:fixed-d,z1:fixed+d,type:'sandbag'}:{x0:fixed-d,x1:fixed+d,z0:Math.min(a0,a1),z1:Math.max(a0,a1),type:'sandbag'});
 }
 // a plain, flat-roofed single-story box building in either mudbrick or bare concrete, with one
@@ -1100,17 +1111,27 @@ function bigWall(axis,fixed,a0,a1,h){
 // fully custom palette) so deathmatch never gets the peaked-roof "village house" look
 const MUD_COLS=[0xc9a876,0xb8916a,0xceb488,0xa8875f,0xbfa070,0xd4b98c];
 const CONC_COLS=[0x8a8d86,0x7c8079,0x9a9d94,0x6f736c,0x878a82,0x757971];
-function flatBuilding(cx,cz,w,d,rot,style){
+function flatBuilding(cx,cz,w,d,rot,style,base){
+  base=base||0;
   const h=sr(2.6,3.3),hw=w/2,hd=d/2,wt=0.3,doorW=1.3;
   const pal=style==='mud'?MUD_COLS:CONC_COLS,col=pal[Math.floor(srand()*pal.length)];
   const roofCol=style==='mud'?0x8a6f4a:0x4a4d47;
   const e=emitter(cx,cz,rot);
-  e.box(-hw,0,-hd,hw,h,-hd+wt,col);
-  e.box(-hw,0,hd-wt,-doorW/2,h,hd,col);e.box(doorW/2,0,hd-wt,hw,h,hd,col);
-  e.box(-hw,0,-hd,-hw+wt,h,hd,col);e.box(hw-wt,0,-hd,hw,h,hd,col);
-  e.box(-hw-0.3,h,-hd-0.3,hw+0.3,h+0.22,hd+0.3,roofCol);
+  // big glassless window openings (no frame trim) - solid sill/header bands, wide open middle
+  const sill=base+0.9,head=Math.max(sill+0.6,base+h-0.35);
+  const windowed=(mk,span)=>{
+    const ww=span*0.6;
+    mk(-span/2,span/2,base,sill);
+    mk(-span/2,span/2,head,base+h);
+    mk(-span/2,-ww/2,sill,head);mk(ww/2,span/2,sill,head);
+  };
+  windowed((p0,p1,y0,y1)=>e.box(p0,y0,-hd,p1,y1,-hd+wt,col),w);           // back wall
+  windowed((p0,p1,y0,y1)=>e.box(-hw,y0,p0,-hw+wt,y1,p1,col),d);           // left wall
+  windowed((p0,p1,y0,y1)=>e.box(hw-wt,y0,p0,hw,y1,p1,col),d);             // right wall
+  e.box(-hw,base,hd-wt,-doorW/2,base+h,hd,col);e.box(doorW/2,base,hd-wt,hw,base+h,hd,col);
+  e.box(-hw-0.3,base+h,-hd-0.3,hw+0.3,base+h+0.22,hd+0.3,roofCol);
   const c1=e.pt(-hw,-hd),c2=e.pt(hw,hd);
-  BLD.push({x0:Math.min(c1.x,c2.x),x1:Math.max(c1.x,c2.x),z0:Math.min(c1.z,c2.z),z1:Math.max(c1.z,c2.z),base:DM_GROUND,floors:1,fh:h,
+  BLD.push({x0:Math.min(c1.x,c2.x),x1:Math.max(c1.x,c2.x),z0:Math.min(c1.z,c2.z),z1:Math.max(c1.z,c2.z),base,floors:1,fh:h,
     doorOut:e.pt(0,hd+1.3),doorIn:e.pt(0,hd-0.8),stairs:null,gate:null});
 }
 function buildDeathmatchMap(){
@@ -1119,30 +1140,44 @@ function buildDeathmatchMap(){
   // save and restore here)
   const bldFrom=BLD.length;
 
-  // flat dirt ground
+  // dirt ground, following the basin/plateau/hill profile - a basin down the middle, each village
+  // plateau'd up, and a hill rising behind each bunker
   {
     const sx=DM_HALF_X*2+40,sz=DM_HALF_Z*2+40;
-    const g=new THREE.PlaneGeometry(sx,sz,40,24);g.rotateX(-Math.PI/2);
+    const g=new THREE.PlaneGeometry(sx,sz,64,24);g.rotateX(-Math.PI/2);
     const pos=g.attributes.position,cols=new Float32Array(pos.count*3);
     const base=new THREE.Color(0xb99a6e),dark=new THREE.Color(0x99794f),c=new THREE.Color();
     for(let i=0;i<pos.count;i++){
       const x=pos.getX(i),z=pos.getZ(i);
+      pos.setY(i,dmTerrainH(x));
       c.copy(base).lerp(dark,clamp(0.5+0.5*Math.sin(x*0.045)*Math.cos(z*0.05),0,1)*0.55);
       cols[i*3]=c.r;cols[i*3+1]=c.g;cols[i*3+2]=c.b;
     }
     g.setAttribute('color',new THREE.BufferAttribute(cols,3));
+    g.computeVertexNormals();
     const m=new THREE.Mesh(g,new THREE.MeshLambertMaterial({vertexColors:true}));
     m.position.set(DM_OX,DM_GROUND,DM_OZ);m.receiveShadow=true;scene.add(m);
   }
 
-  // mountain wall: overlapping square pillars along the rectangle's perimeter, fully enclosing the
-  // arena (the arena has no blue zone - this boundary is the only thing containing play)
+  // mountain range boundary: two-tier tapered peaks (wide rocky base + narrower cap), fully
+  // enclosing the arena (the arena has no blue zone - this boundary is the only thing containing
+  // play; the player-position clamp in resolve() is the actual hard stop either way). Every peak's
+  // position is jittered on BOTH axes rather than sitting on one dead-straight line - the old
+  // version placed every pillar on one edge at the exact same inward/outward coordinate, so their
+  // overlapping faces were perfectly coplanar and z-fought into a flickery "see-through" look.
   {
-    const Lx=DM_HALF_X+14,Lz=DM_HALF_Z+14,half=26,step=24;
-    const cols=[0x6f6a5c,0x625d50,0x79725f];
-    const put=(nx,nz)=>{const h=sr(85,135),c=cols[Math.floor(srand()*3)];addBox(nx-half,DM_GROUND-6,nz-half,nx+half,DM_GROUND+h,nz+half,c);};
-    for(let x=-Lx;x<=Lx+1e-6;x+=step){put(DM_OX+x,DM_OZ-Lz);put(DM_OX+x,DM_OZ+Lz);}
-    for(let z=-Lz+step;z<Lz-1e-6;z+=step){put(DM_OX-Lx,DM_OZ+z);put(DM_OX+Lx,DM_OZ+z);}
+    const Lx=DM_HALF_X+16,Lz=DM_HALF_Z+16,step=22;
+    const cols=[0x6f6a5c,0x625d50,0x79725f,0x716b5c];
+    const peak=(nx,nz)=>{
+      const gy=dmGroundY(nx);
+      const baseW=sr(20,32),baseD=sr(20,32),h1=sr(70,120),h2=h1+sr(30,70);
+      const c1=cols[Math.floor(srand()*cols.length)],c2=cols[Math.floor(srand()*cols.length)];
+      addBox(nx-baseW,gy-6,nz-baseD,nx+baseW,gy+h1,nz+baseD,c1);
+      const capW=baseW*sr(0.45,0.65),capD=baseD*sr(0.45,0.65),cjx=sr(-6,6),cjz=sr(-6,6);
+      addBox(nx+cjx-capW,gy+h1*0.55,nz+cjz-capD,nx+cjx+capW,gy+h2,nz+cjz+capD,c2);
+    };
+    for(let x=-Lx;x<=Lx+1e-6;x+=step){peak(DM_OX+x+sr(-5,5),DM_OZ-Lz+sr(-5,5));peak(DM_OX+x+sr(-5,5),DM_OZ+Lz+sr(-5,5));}
+    for(let z=-Lz+step;z<Lz-1e-6;z+=step){peak(DM_OX-Lx+sr(-5,5),DM_OZ+z+sr(-5,5));peak(DM_OX+Lx+sr(-5,5),DM_OZ+z+sr(-5,5));}
   }
 
   // village: dense, shabby combat-outpost clutter - flat-roofed mudbrick AND bare-concrete boxes,
@@ -1156,13 +1191,13 @@ function buildDeathmatchMap(){
       const roll=srand();
       if(roll<0.42){
         const w=Math.round(sr(5,8)),d=Math.round(sr(5,7)),rot=Math.floor(srand()*4);
-        flatBuilding(DM_OX+x+sr(-2,2),DM_OZ+rz+sr(-2,2),w,d,rot,srand()<0.5?'mud':'conc');
+        flatBuilding(DM_OX+x+sr(-2,2),DM_OZ+rz+sr(-2,2),w,d,rot,srand()<0.5?'mud':'conc',dmGroundY(DM_OX+x));
       } else if(roll<0.64){
-        container(DM_OX+x+sr(-1.5,1.5),DM_OZ+rz+sr(-2,2),Math.floor(srand()*2));
+        container(DM_OX+x+sr(-1.5,1.5),DM_OZ+rz+sr(-2,2),Math.floor(srand()*2),dmGroundY(DM_OX+x));
       } else if(roll<0.9){
         const len=sr(3,5.5);
-        if(srand()<0.5) sandbagRun('x',DM_OZ+rz+sr(-2,2),DM_OX+x-len/2,DM_OX+x+len/2);
-        else sandbagRun('z',DM_OX+x+sr(-2,2),DM_OZ+rz-len/2,DM_OZ+rz+len/2);
+        if(srand()<0.5) sandbagRun('x',DM_OZ+rz+sr(-2,2),DM_OX+x-len/2,DM_OX+x+len/2,null,dmGroundY(DM_OX+x));
+        else sandbagRun('z',DM_OX+x+sr(-2,2),DM_OZ+rz-len/2,DM_OZ+rz+len/2,null,dmGroundY(DM_OX+x));
       }
       x+=sr(6,9);
     }
@@ -1171,23 +1206,23 @@ function buildDeathmatchMap(){
   // defense before your own spawn, mirroring a real outpost's perimeter
   for(const side of [-1,1]){
     const bx=DM_OX+side*(BASE_DX-16);
-    sandbagRun('z',bx,DM_OZ-16,DM_OZ-5);
-    sandbagRun('z',bx,DM_OZ+5,DM_OZ+16);
+    sandbagRun('z',bx,DM_OZ-16,DM_OZ-5,null,dmGroundY(bx));
+    sandbagRun('z',bx,DM_OZ+5,DM_OZ+16,null,dmGroundY(bx));
   }
   // a broken line of cover roughly down the middle of the arena, mixing tall HESCO-style barriers
   // with sandbag runs, so the map *reads* as split into two halves - several gaps left to cross
   // through, not one continuous wall sealing the whole boundary
   for(const[z0,z1,kind]of[[-34,-24,'hesco'],[-16,-5,'sand'],[5,16,'sand'],[24,34,'hesco']]){
-    const xj=DM_OX+sr(-2,2);
-    if(kind==='hesco') bigWall('z',xj,z0,z1); else sandbagRun('z',xj,z0,z1);
+    const xj=DM_OX+sr(-2,2),gy=dmGroundY(xj);
+    if(kind==='hesco') bigWall('z',xj,z0,z1,null,gy); else sandbagRun('z',xj,z0,z1,null,gy);
   }
   for(let i=bldFrom;i<BLD.length;i++){const b=BLD[i];DM_PROPS.push({x0:b.x0,x1:b.x1,z0:b.z0,z1:b.z1,type:'building'});}
 
   // two sealed, windowless respawn bunkers (one per team) - there is no door, so nobody ever
   // walks in; players only ever arrive here by being teleported in in dmRespawn()
   function bunker(localX){
-    const bx=DM_OX+localX,bz=DM_OZ,bw=12,bd=9,bh=4.4,wt=0.45;
-    const x0=bx-bw/2,x1=bx+bw/2,z0=bz-bd/2,z1=bz+bd/2,y0=DM_GROUND,y1=DM_GROUND+bh,col=0x53584f;
+    const bx=DM_OX+localX,bz=DM_OZ,bw=12,bd=9,bh=4.4,wt=0.45,gy=dmGroundY(bx);
+    const x0=bx-bw/2,x1=bx+bw/2,z0=bz-bd/2,z1=bz+bd/2,y0=gy,y1=gy+bh,col=0x53584f;
     addBox(x0,y0,z0,x1,y1,z0+wt,col);addBox(x0,y0,z1-wt,x1,y1,z1,col);
     addBox(x0,y0,z0,x0+wt,y1,z1,col);addBox(x1-wt,y0,z0,x1,y1,z1,col);
     DM_PROPS.push({x0,x1,z0,z1,type:'bunker',team:localX<0?0:1});
@@ -1196,7 +1231,7 @@ function buildDeathmatchMap(){
     return {x:bx,z:bz};
   }
   DM_BUNKERS=[bunker(-BASE_DX),bunker(BASE_DX)];
-  const frontSpawns=(localX,face)=>{const pts=[];for(let i=0;i<8;i++)pts.push({x:DM_OX+localX+face*sr(8,14),z:DM_OZ+sr(-18,18)});return pts;};
+  const frontSpawns=(localX,face)=>{const pts=[];for(let i=0;i<18;i++)pts.push({x:DM_OX+localX+face*sr(8,14),z:DM_OZ+sr(-18,18)});return pts;};
   DM_SPAWN=[
     {team:0,base:DM_BUNKERS[0],front:frontSpawns(-BASE_DX,1)},
     {team:1,base:DM_BUNKERS[1],front:frontSpawns(BASE_DX,-1)},
@@ -1859,8 +1894,8 @@ function damage(v,amount,attacker,head,wname){
 }
 // ---------- deathmatch: fixed AR+DMR loadout, infinite ammo, lvl2 armor, team-kill scoring,
 // timed respawns at a sealed per-team bunker. No loot exists in this mode at all.
-const DM_AR=['M416','AKM'],DM_DMR=['Kar98k','MK14'],DM_TEAM_COL=[0x2f5fa8,0xa8342f];
-const DM={score:[0,0],timer:0,target:30,limit:600,respawnWait:6,feedQ:[]};
+const DM_AR=['M416','AKM'],DM_DMR=['Kar98k','MK14'],DM_TEAM_COL=[0x2f5fa8,0xa8342f],DM_TEAM_SIZE=8;
+const DM={score:[0,0],timer:0,target:50,limit:900,respawnWait:6,feedQ:[],airstrikeTier:0};
 function dmEquip(a){
   const ld=a.dmLoadout||(a.dmLoadout={ar:DM_AR[0],dmr:DM_DMR[0]});
   a.slots=[{key:ld.ar,mag:WEAPONS[ld.ar].mag},{key:ld.dmr,mag:WEAPONS[ld.dmr].mag},null];
@@ -1884,7 +1919,7 @@ function renderDMWeap(){
 function dmSpawnPos(team){ return pick(DM_SPAWN[team].front); }
 function dmPlaceAtSpawn(a){
   const p=dmSpawnPos(a.team);
-  a.pos.set(p.x,DM_GROUND+0.1,p.z);a.yaw=a.team===0?Math.PI/2:-Math.PI/2;a.pitch=0;
+  a.pos.set(p.x,dmGroundY(p.x)+0.1,p.z);a.yaw=a.team===0?Math.PI/2:-Math.PI/2;a.pitch=0;
   a.state='ground';a.onGround=true;a.vy=0;a.stance='stand';a.alive=true;a.hp=100;a.deadT=0;
   dmEquip(a);
   if(!a.isPlayer&&a.brain){a.brain.target=null;a.brain.path=[];a.brain.mode='none';}
@@ -1896,6 +1931,7 @@ function dmKill(v,k,wname,head){
   if(k&&k.team!==v.team){
     k.kills++;DM.score[k.team]=(DM.score[k.team]||0)+1;
     if(!k.isPlayer&&k.brain&&k.brain.target===v)k.brain.target=null;
+    dmCheckAirstrike();
   }
   feed(k,v,wname,head);
   DM.feedQ.push({kid:k?k.id:null,vid:v.id,w:wname,head:!!head});
@@ -1905,6 +1941,55 @@ function dmKill(v,k,wname,head){
 }
 function dmCheckWin(){
   if(DM.score[0]>=DM.target||DM.score[1]>=DM.target||DM.timer>=DM.limit) dmEndMatch();
+}
+// airstrike event: whichever team's score first crosses each new multiple of 10 triggers one -
+// 3 bombs land randomly in EACH team's territory (6 total), each doing distance-falloff damage out
+// to a 5m radius. Only the host/solo side picks points and applies damage (damage() is never
+// authoritative on a client); the host also broadcasts the points so clients can play the same
+// siren + explosions even though their hp only actually changes once the next state sync lands.
+function dmPickAirstrikePts(){
+  const pts=[];
+  for(const side of[-1,1]) for(let i=0;i<3;i++){
+    const x=DM_OX+side*sr(10,68),z=DM_OZ+sr(-DM_HALF_Z+8,DM_HALF_Z-8);
+    pts.push({x,z});
+  }
+  return pts;
+}
+function dmAirstrikeSiren(){
+  if(!AC) return;
+  const bus=spatial(null,0),t=AC.currentTime;
+  for(let i=0;i<4;i++) tone(t+i*0.4,bus,{type:'sawtooth',f:480,f2:900,dur:0.34,vol:0.1});
+}
+function dmExplodeAt(p,doDamage){
+  const gy=dmGroundY(p.x),pos=new V3(p.x,gy+0.6,p.z);
+  puff(pos,false,16);
+  if(AC){
+    const bus=spatial(pos,0.5),t=AC.currentTime;
+    tone(t,bus,{type:'sine',f:70,f2:28,dur:0.55,vol:0.9,a:0.005});
+    nz(t,bus,{type:'lowpass',f:900,f2:150,dur:0.5,vol:0.8,a:0.004});
+  }
+  if(!doDamage) return;
+  for(const a of actors){
+    if(!a.alive) continue;
+    const d=Math.hypot(a.pos.x-p.x,a.pos.z-p.z);
+    if(d>5) continue;
+    const dmg=Math.round(lerp(85,5,d/5));
+    damage(a,dmg,null,false,'공습');
+  }
+}
+function dmPlayAirstrike(pts){
+  bigMsg('공습 경보!','amber',2.2);
+  dmAirstrikeSiren();
+  const doDamage=G.net.mode!=='client';
+  pts.forEach((p,i)=>schedule(1.8+i*0.22,()=>dmExplodeAt(p,doDamage)));
+}
+function dmCheckAirstrike(){
+  const tier=Math.floor(Math.max(DM.score[0],DM.score[1])/10);
+  if(tier<=DM.airstrikeTier||tier<1) return;
+  DM.airstrikeTier=tier;
+  const pts=dmPickAirstrikePts();
+  if(G.net.mode==='host') broadcastAll({type:'airstrike',pts});
+  dmPlayAirstrike(pts);
 }
 function dmTick(dt){
   DM.timer+=dt;
@@ -2836,7 +2921,7 @@ const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',
 function feed(k,v,w,head){
   const el=document.createElement('div');el.className='kf';
   const nm=a=>`<span class="${a&&a.isPlayer?'me':''}">${esc(a?a.name:'')}</span>`;
-  el.innerHTML=k?`${nm(k)}<em>${esc(w)}</em>${nm(v)}${head?'<span class="hs">HS</span>':''}`:`${nm(v)}<em>블루존</em>`;
+  el.innerHTML=k?`${nm(k)}<em>${esc(w)}</em>${nm(v)}${head?'<span class="hs">HS</span>':''}`:`${nm(v)}<em>${esc(w||'블루존')}</em>`;
   const f=$('feed');f.prepend(el);while(f.children.length>6)f.lastChild.remove();
   setTimeout(()=>{el.style.opacity=0;setTimeout(()=>el.remove(),700);},7000);
 }
@@ -3209,11 +3294,11 @@ function newGame(netCfg){
   startHum();
   setAliveLabel();
 }
-// deathmatch: 2 teams of 5 (player + humans first, bots fill the rest), fixed AR+DMR loadout,
-// no loot to spawn. netCfg shape matches newGame()'s - 'total' is ignored, DM is always 5v5.
+// deathmatch: 2 teams of 8 (player + humans first, bots fill the rest), fixed AR+DMR loadout,
+// no loot to spawn. netCfg shape matches newGame()'s - 'total' is ignored, DM is always 8v8.
 function newGameDM(netCfg){
   clearGame();
-  G.dm=true;DM.score=[0,0];DM.timer=0;DM.feedQ=[];DM.target=30;DM.limit=600;DM.respawnWait=6;
+  G.dm=true;DM.score=[0,0];DM.timer=0;DM.feedQ=[];DM.target=50;DM.limit=900;DM.respawnWait=6;DM.airstrikeTier=0;
   const humans=netCfg?[{id:netCfg.myId,name:netCfg.myName,isMe:true},...netCfg.humans.map(h=>({id:h.id,name:h.name}))]:[{id:'solo',name:'나',isMe:true}];
   humans.forEach((h,i)=>h.team=i%2);
   for(const h of humans){
@@ -3224,7 +3309,7 @@ function newGameDM(netCfg){
   }
   let bi=0;
   for(let team=0;team<2;team++){
-    while(actors.filter(a=>a.team===team).length<5){
+    while(actors.filter(a=>a.team===team).length<DM_TEAM_SIZE){
       const b=makeBot(bi,DM_TEAM_COL[team]);b.id='bot'+(bi++);b.team=team;b.shirtColor=DM_TEAM_COL[team];actors.push(b);
     }
   }
@@ -3238,8 +3323,8 @@ function newGameDM(netCfg){
 }
 // updates the top-left SOLO/멀티 badge and the over-screen's "/50" to match the actual match size
 function setAliveLabel(){
-  const n=G.dm?10:(G.net.mode==='off'?BOTS+1:(actors.length||50));
-  $('lobbyTag').textContent=G.dm?'DM · 5v5':(G.net.mode==='off'?'SOLO · ':'MULTI · ')+n;
+  const n=G.dm?DM_TEAM_SIZE*2:(G.net.mode==='off'?BOTS+1:(actors.length||50));
+  $('lobbyTag').textContent=G.dm?`DM · ${DM_TEAM_SIZE}v${DM_TEAM_SIZE}`:(G.net.mode==='off'?'SOLO · ':'MULTI · ')+n;
   $('ovTotal').textContent=n;
 }
 // client side of a networked match start: build the world from the host's manifest instead of
@@ -3271,7 +3356,7 @@ function netJoinMatch(msg){
 // every other peer) so only the roster (who's on which team) needs to come from the host
 function netJoinMatchDM(msg){
   clearGame();
-  G.dm=true;DM.score=[0,0];DM.timer=0;DM.feedQ=[];DM.target=30;DM.limit=600;DM.respawnWait=6;
+  G.dm=true;DM.score=[0,0];DM.timer=0;DM.feedQ=[];DM.target=50;DM.limit=900;DM.respawnWait=6;DM.airstrikeTier=0;
   player=null;
   for(const r of msg.roster){
     const a=new Actor(r.id===G.net.myId,r.name,DM_TEAM_COL[r.team]);
@@ -3580,7 +3665,7 @@ $('mpDM').addEventListener('change',()=>{
   if(G.net.mode!=='host')return;
   G.net.dm=$('mpDM').checked;
   $('totalRow').hidden=G.net.dm;
-  G.net.total=G.net.dm?10:+$('mpTotal').value;
+  G.net.total=G.net.dm?DM_TEAM_SIZE*2:+$('mpTotal').value;
   broadcastRoster();
 });
 $('mpReadyBtn').addEventListener('click',()=>{
@@ -3663,6 +3748,8 @@ function onClientMessage(msg){
   } else if(msg.type==='dmEnd'){
     if(G.net.endedLocally)return;G.net.endedLocally=true;
     dmShowResult(player.team===msg.winTeam);
+  } else if(msg.type==='airstrike'){
+    dmPlayAirstrike(msg.pts);
   } else if(msg.type==='hostLeft'){
     if(G.state==='play'&&!G.net.endedLocally){netRoomMsg('호스트가 나가서 경기가 종료되었습니다.');}
   }
@@ -3670,7 +3757,7 @@ function onClientMessage(msg){
 // ---------- host: match start & runtime broadcasting ----------
 function hostStartMatch(){
   const humans=[...G.net.players.values()].filter(p=>p.id!=='host').map(p=>({id:p.id,name:p.name}));
-  const dm=!!G.net.dm,total=dm?10:G.net.total;
+  const dm=!!G.net.dm,total=dm?DM_TEAM_SIZE*2:G.net.total;
   if(!dm&&humans.length+1>total){netRoomMsg('총 인원이 접속한 사람 수보다 적습니다.');return;}
   if(dm&&humans.length+1>10){netRoomMsg('데스매치는 최대 10명(5vs5)까지입니다.');return;}
   G.net.started=true;

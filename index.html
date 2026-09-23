@@ -1357,20 +1357,26 @@ function buildDeathmatchMap(){
     // clear of the gun's own basin-facing firing arc. 13 shallow steps instead of 10 taller ones -
     // each step's rise has to stay under the ~0.4 auto-step threshold moveActor uses to climb a
     // ledge while walking, or it takes an actual jump to mount every single step.
+    // The roof cap overhangs the wall by 0.5 (see bunker()) - steps run from an anchor 0.55 past
+    // the wall face instead of the wall face itself, so the whole staircase clears that overhang
+    // and the top step's surface sits flush with the roof surface instead of running into the
+    // underside of the cap right where the climb would otherwise finish.
+    const wallGap=0.55,anchor=side<0?x0-wallGap:x1+wallGap;
     const stepN=13,stepRun=0.3,stepRise=(y1-y0)/stepN,sz0=tz-1.3,sz1=tz+1.3;
     for(let i=1;i<=stepN;i++){
-      const sa=side<0?x0-i*stepRun:x1+(i-1)*stepRun,sb=side<0?x0-(i-1)*stepRun:x1+i*stepRun;
-      // the step against the wall reaches full roof height; each one further out is shorter, down
+      const sa=side<0?anchor-i*stepRun:anchor+(i-1)*stepRun,sb=side<0?anchor-(i-1)*stepRun:anchor+i*stepRun;
+      // the step nearest the roof reaches full roof height; each one further out is shorter, down
       // to ground level at the far end - the previous version had this inverted (tallest step
-      // farthest from the wall, shortest right against it)
+      // farthest out, shortest right against the roof)
       const topY=y1-(i-1)*stepRise;
       addBox(Math.min(sa,sb),y0,sz0,Math.max(sa,sb),topY,sz1,0x76797a);
     }
-    // seal off the open ground just past the foot of the stairs instead of leaving it as empty,
-    // pointless walkable space out to the far mountain ring - a real, solid HESCO barrier right
-    // behind each bunker reads as "this is the edge", rather than an invisible clamp far beyond it
-    const wallX=side<0?x0-stepN*stepRun-1.2:x1+stepN*stepRun+1.2;
-    bigWall('z',wallX,tz-6,tz+6,5,y0);
+    // seal the back off properly instead of a token barrier standing alone in open ground - a tall,
+    // wide rock-coloured wall (matching the boundary mountains' own palette, not a tan HESCO patch)
+    // sits right past the foot of the stairs, taller than the roof itself so it blocks sightlines
+    // from up there too, not just movement at ground level
+    const wallX=side<0?anchor-stepN*stepRun-0.8:anchor+stepN*stepRun+0.8;
+    addBox(side<0?wallX-2.5:wallX,y0,tz-11,side<0?wallX:wallX+2.5,y0+15,tz+11,0x6f6a5c);
     // gun sits near the roof's front (basin-facing) edge rather than centred - dead centre left it
     // shielded by the bunker's own bulk on shots from below/ahead, so bots down in the basin
     // essentially never had a sightline back up at it even while it was actively firing on them
@@ -1416,7 +1422,7 @@ function buildDeathmatchMap(){
     // so the normal building/stairs pathing never finds this route on its own) - dmBotWander routes
     // bots through this before the roof itself, so they actually climb up instead of just walking
     // into the wall below the mount point
-    const stairBase={x:side<0?x0-4.5:x1+4.5,z:tz};
+    const stairBase={x:side<0?anchor-stepN*stepRun-0.4:anchor+stepN*stepRun+0.4,z:tz};
     DM_MGS.push({x:gx,y:y1,z:tz,yaw,team,occupant:null,mag:50,mesh:base,gunMesh:gun,stairBase});   // 50 = WEAPONS.MG.mag, hardcoded: this runs before the WEAPONS table exists (buildDeathmatchMap fires during BR world-gen, well above it in load order)
   }
   const frontSpawns=(localX,face)=>{const pts=[];for(let i=0;i<18;i++)pts.push({x:DM_OX+localX+face*sr(8,14),z:DM_OZ+sr(-18,18)});return pts;};
@@ -2213,17 +2219,23 @@ function dmPlaceAtSpawn(a){
   if(!a.isPlayer&&a.brain){a.brain.target=null;a.brain.path=[];a.brain.mode='none';}
 }
 function dmRespawn(a){ dmPlaceAtSpawn(a); }
-// how far back of the gun's pivot the gunner's camera sits - has to clear the seat/support post
-// (the model's rearmost parts, at local z=-0.72) with margin, or the camera ends up planted inside
-// them looking at a single mesh face point-blank ("only a flat disc visible" - that disc was
-// literally the seat). 0.45 wasn't enough; the gun body itself starts at local z=-0.35, so the old
-// offset barely cleared that and was still nose-to-nose with it.
-const MG_SEAT_OFS=1.15;
-// how far the gun can swing each way from the mount's own facing before it's clamped. Without a
-// limit, looking far enough around (well short of fully backward) swings the barrel/receiver close
-// enough to the fixed camera spot behind it to fill the whole view - a real tripod gun has a limited
-// traverse arc for exactly this reason, so this doubles as the actual visibility fix.
+// how far back of the gun's pivot the gunner's camera sits. The camera only moves with YAW (it's
+// fixed to the mount's own facing, mg.yaw) but the gun ALSO tilts with PITCH (gun.rotation.x), and
+// the elevated parts - shield/body/pivot, all a good 1.05-1.3 units above the pivot - sweep a wide
+// arc toward the fixed camera as pitch swings even moderately, since their height becomes lever arm:
+// at pitch~30 deg the shield alone swings back by over half a metre from its neutral position. 1.15
+// only ever accounted for the neutral pose; camera was getting swept into by the gun itself on any
+// real aim-up/down, not just at extreme yaw. 2.0 keeps real clearance (~1-2 units) across the full
+// clamped yaw/pitch range below, verified by direct calculation, not just at dead-centre aim.
+const MG_SEAT_OFS=2.0;
+// how far the gun can swing each way (yaw) from the mount's own facing before it's clamped. Without
+// a limit, looking far enough around swings the barrel/receiver close enough to the fixed camera
+// spot behind it to fill the whole view - a real tripod gun has a limited traverse arc for exactly
+// this reason.
 const MG_TRAVERSE=100*Math.PI/180;
+// same idea for pitch (up/down) - a real tripod gun's elevation is limited too, and here it also
+// keeps the elevated gun body from swinging back toward the fixed camera on a steep look-up/down.
+const MG_PITCH_LIMIT=0.5;
 // mounted hilltop MG (deathmatch, player or bot): F to mount/dismount. Installs the MG into whatever
 // slot was current (restored on dismount), with its own 'MG' ammo pool set to Infinity so the
 // existing mag/reload system just works unmodified - 50 rounds (WEAPONS.MG.mag) per belt, reload
@@ -2848,6 +2860,7 @@ function updatePlayer(dt){
   // Only the gun (mg.gunMesh) turns to track where the player's actually looking.
   if(p.mg){
     p.yaw=p.mg.yaw+clamp(angDiff(p.mg.yaw,p.yaw),-MG_TRAVERSE,MG_TRAVERSE);
+    p.pitch=clamp(p.pitch,-MG_PITCH_LIMIT,MG_PITCH_LIMIT);
     p.pos.x=p.mg.x+Math.sin(p.mg.yaw)*MG_SEAT_OFS;p.pos.y=p.mg.y;p.pos.z=p.mg.z+Math.cos(p.mg.yaw)*MG_SEAT_OFS;p.vy=0;p.onGround=true;
     if(p.mg.gunMesh){p.mg.gunMesh.rotation.y=p.yaw-p.mg.yaw;p.mg.gunMesh.rotation.x=-p.pitch;}
   }
@@ -3195,6 +3208,7 @@ function updateBot(b,dt){
   if(b.mg){
     // tripod/seat stay fixed (mg.yaw, not live b.yaw); only the gun (mg.gunMesh) tracks the bot's aim
     b.yaw=b.mg.yaw+clamp(angDiff(b.mg.yaw,b.yaw),-MG_TRAVERSE,MG_TRAVERSE);
+    b.pitch=clamp(b.pitch,-MG_PITCH_LIMIT,MG_PITCH_LIMIT);
     b.pos.x=b.mg.x+Math.sin(b.mg.yaw)*MG_SEAT_OFS;b.pos.y=b.mg.y;b.pos.z=b.mg.z+Math.cos(b.mg.yaw)*MG_SEAT_OFS;b.vy=0;b.onGround=true;
     if(b.mg.gunMesh){b.mg.gunMesh.rotation.y=b.yaw-b.mg.yaw;b.mg.gunMesh.rotation.x=-b.pitch;}
   }

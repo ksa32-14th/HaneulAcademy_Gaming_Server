@@ -496,24 +496,21 @@ function P(g,c,x,y,z,rx){const m=M(g,c,x,y,z);if(rx)m.rotation.x=rx;return m;}
 // 5:3 rectangle, long axis along X - each team spawns from a bunker on a short (Z) edge and fights
 // down the long lane. Much smaller than the old 420x420 square so AR/DMR fights actually happen
 // instead of everyone wandering for a minute before finding anyone.
-const DM_OX=6000,DM_OZ=0,DM_HALF_X=80,DM_HALF_Z=48,DM_GROUND=0;
+const DM_OX=6000,DM_OZ=0,DM_HALF_X=72,DM_HALF_Z=48,DM_GROUND=0;
 function inDM(x,z){return Math.abs(x-DM_OX)<DM_HALF_X&&Math.abs(z-DM_OZ)<DM_HALF_Z;}
-// elevation profile along the long axis: a flat basin down the middle (kept at its original size -
-// this is the main fighting floor), each village sitting up on a flat plateau, and a taller
-// (also flat-topped) hill behind each team's bunker with a small mounted-MG pocket on it - height
-// only depends on distance from centre (uniform across Z), like a simple cross-section. The plateau
-// and hilltop bands were both trimmed down from an earlier pass (the hilltop used to be a full open
-// 16-unit firing field; now it's walled down to a small nook around the MG, so it never needed that
-// much raw space to begin with). Ramp bands stay clear of anything flat-bottomed sitting on them - a
-// box straddling a slope sits half-buried/half-floating since it only samples height at its centre.
+// elevation profile along the long axis: a flat basin down the middle (kept at its original size)
+// and each village sitting up on a flat plateau - height only depends on distance from centre
+// (uniform across Z), like a simple cross-section. There's no separate hill tier any more: the
+// mounted MG moved from a walled hilltop pocket onto a rooftop tower instead (see
+// buildDeathmatchMap), so the plateau just runs flat all the way out to the boundary now. The ramp
+// stays clear of anything flat-bottomed sitting on it - a box straddling a slope sits half-buried/
+// half-floating since it only samples height once, at its own centre.
 const DM_SLOPE1=[21,29]; // basin -> plateau ramp, in |local x| - village placement skips this band
 function dmTerrainH(lx){
   const ax=Math.min(Math.abs(lx),DM_HALF_X);
   if(ax<DM_SLOPE1[0]) return 0;
   if(ax<DM_SLOPE1[1]) return lerp(0,4,smooth(DM_SLOPE1[0],DM_SLOPE1[1],ax));
-  if(ax<56) return 4;                              // plateau: village range plus the bunker, flat
-  if(ax<62) return lerp(4,12,smooth(56,62,ax));     // hill ramp, well past the bunker - nothing sits here
-  return 12;                                         // hilltop: small walled MG nook, see buildDeathmatchMap
+  return 4;                                          // plateau: flat all the way to the boundary
 }
 function dmGroundY(x){ return DM_GROUND+dmTerrainH(x-DM_OX); }
 // ---------- terrain
@@ -1252,10 +1249,12 @@ function buildDeathmatchMap(){
   for(const rz of [-32,-16,0,16,32]){
     let x=-36;
     while(x<36){
-      // skip the basin->plateau ramp entirely - a flat-bottomed box straddling sloped ground is
-      // what caused the "sinking/floating" look reported on the hill ramp, so nothing at all gets
-      // placed on either ramp (this one, or the hill ramp past the bunker - see dmTerrainH)
-      if(Math.abs(x)>=DM_SLOPE1[0]&&Math.abs(x)<=DM_SLOPE1[1]){x+=sr(6,9);continue;}
+      // skip the basin->plateau ramp, padded by the widest footprint anything here can have (an 8m
+      // building, half-width 4) - the old check only skipped a CENTRE landing inside the ramp, but a
+      // building placed just outside it could still overhang into the slope with its far edge, which
+      // is exactly the "sinking/floating" look reported (its height is sampled once at the centre, so
+      // an overhanging edge sits at the wrong height for the real, sloped ground under it there)
+      if(Math.abs(x)>=DM_SLOPE1[0]-4&&Math.abs(x)<=DM_SLOPE1[1]+4){x+=sr(6,9);continue;}
       const roll=srand();
       // the old fixed sr(6,9) step didn't know how wide what it just placed was, so a wide building
       // (up to 8m) could land right up against the next prop with barely a gap - track the actual
@@ -1313,19 +1312,37 @@ function buildDeathmatchMap(){
     return {x:bx,z:bz};
   }
   DM_BUNKERS=[bunker(-BASE_DX,0),bunker(BASE_DX,1)];
-  // hilltop MG nook: a small walled pocket behind each base, not a wide-open firing field - the
-  // hilltop terrain band itself is only 16 units deep now, and cap walls (spanning that whole depth
-  // at z=+-9) seal off everything except this pocket, so there's nowhere to wander on the hill
-  // besides the gun position itself.
+  // MG rooftop tower: the separate hill terrain tier is gone entirely (map back to a flat basin ->
+  // ramp -> plateau profile, see dmTerrainH) - the gun now sits on top of a plain grey tower with the
+  // same team-colour ID band as the bunker, reached by an exterior staircase on the side facing away
+  // from the enemy, with a little sandbag cover on the roof around the gun.
   DM_MGS=[];
   for(const side of [-1,1]){
-    const hx=DM_OX+side*71,gy=dmGroundY(hx),yaw=side<0?Math.PI/2:-Math.PI/2;
-    const capX0=DM_OX+side*62,capX1=DM_OX+side*80;
-    bigWall('x',DM_OZ-9,Math.min(capX0,capX1),Math.max(capX0,capX1),3.4,gy);
-    bigWall('x',DM_OZ+9,Math.min(capX0,capX1),Math.max(capX0,capX1),3.4,gy);
-    sandbagRun('z',hx,DM_OZ-7,DM_OZ-2.5,1.6,gy);
-    sandbagRun('z',hx,DM_OZ+2.5,DM_OZ+7,1.6,gy);
-    bigWall('z',hx+side*5.5,DM_OZ-8,DM_OZ+8,3.2,gy);
+    const team=side<0?0:1;
+    const tx=DM_OX+side*62,tz=DM_OZ,tw=6,td=6,th=4.2,gy=dmGroundY(tx);
+    const x0=tx-tw/2,x1=tx+tw/2,z0=tz-td/2,z1=tz+td/2,y0=gy,y1=gy+th;
+    const col=0x8a8d86,tc=BUNKER_TEAM_COL[team];
+    addBox(x0,y0,z0,x1,y1,z1,col);
+    const by0=y0+th*0.4,by1=y0+th*0.55;
+    addBox(x0-0.02,by0,z0-0.02,x1+0.02,by1,z0+0.02,tc,{collide:false});
+    addBox(x0-0.02,by0,z1-0.02,x1+0.02,by1,z1+0.02,tc,{collide:false});
+    addBox(x0-0.02,by0,z0-0.02,x0+0.02,by1,z1+0.02,tc,{collide:false});
+    addBox(x1-0.02,by0,z0-0.02,x1+0.02,by1,z1+0.02,tc,{collide:false});
+    addBox(x0-0.3,y1,z0-0.3,x1+0.3,y1+0.25,z1+0.3,0x7c8079,{collide:false});
+    DM_PROPS.push({x0,x1,z0,z1,type:'building'});
+    // exterior staircase on the outer face (away from the arena centre / the enemy team)
+    const stepN=10,stepRun=0.3,stepRise=th/stepN,sz0=tz-1.3,sz1=tz+1.3;
+    for(let i=1;i<=stepN;i++){
+      const sa=side<0?x0-i*stepRun:x1+(i-1)*stepRun,sb=side<0?x0-(i-1)*stepRun:x1+i*stepRun;
+      addBox(Math.min(sa,sb),y0,sz0,Math.max(sa,sb),y0+i*stepRise,sz1,0x76797a);
+    }
+    // a little sandbag cover on the roof around the gun, facing the basin
+    sandbagRun('z',tx,tz-3,tz-1.2,1.3,y1);
+    sandbagRun('z',tx,tz+1.2,tz+3,1.3,y1);
+    // yaw: forward=(-sin,0,-cos) (see dmPlaceAtSpawn) - team0 (negative-x side) faces +x into the
+    // arena at yaw=-PI/2, team1 the mirror. The gun model's barrel points along its own local +Z, so
+    // the group needs +PI on top of that to actually point the same way as that forward vector.
+    const yaw=side<0?-Math.PI/2:Math.PI/2;
     // a heavier, more detailed tripod gun than before: cooling-jacketed barrel with a muzzle brake,
     // a small gun shield, spade grips, an ammo box on the side, and an actual seat behind it (the
     // gunner sits, doesn't stand) instead of six plain boxes that read as a toy
@@ -1347,10 +1364,10 @@ function buildDeathmatchMap(){
       P(gC(.16,.05),woodCol,0,.62,-.72,1.5708),
       P(gB(.04,.55,.04),legCol,0,.34,-.72)
     );
-    grp.position.set(hx,gy,DM_OZ);grp.rotation.y=yaw;
+    grp.position.set(tx,y1,tz);grp.rotation.y=yaw+Math.PI;
     grp.traverse(m=>{if(m.isMesh){m.castShadow=true;m.receiveShadow=true;}});
     scene.add(grp);
-    DM_MGS.push({x:hx,y:gy,z:DM_OZ,yaw,team:side<0?0:1,occupant:null});
+    DM_MGS.push({x:tx,y:y1,z:tz,yaw,team,occupant:null,mag:50,mesh:grp});   // 50 = WEAPONS.MG.mag, hardcoded: this runs before the WEAPONS table exists (buildDeathmatchMap fires during BR world-gen, well above it in load order)
   }
   const frontSpawns=(localX,face)=>{const pts=[];for(let i=0;i<18;i++)pts.push({x:DM_OX+localX+face*sr(8,14),z:DM_OZ+sr(-18,18)});return pts;};
   DM_SPAWN=[
@@ -1455,7 +1472,7 @@ const WEAPONS={
   // mounted hilltop MG (deathmatch only, see DM_MGS/mountMG): never lootable, always installed into
   // whichever slot the player was holding while they mount it. Tight spread even from the hip since
   // it's tripod-stabilised, and default-aimed (mountMG forces G.ads) on top of that.
-  MG:    {name:'거치기관총',ammo:'MG',dmg:38,rpm:650,auto:true,mag:50,spread:0.017,reload:4.5,range:500,zoom:1,pellets:1,recoil:0.02,hz:0.3,muz:1.05,rank:5,kind:'mg',mounted:true},
+  MG:    {name:'저지기관총',ammo:'MG',dmg:38,rpm:650,auto:true,mag:50,spread:0.017,reload:4.5,range:500,zoom:1,pellets:1,recoil:0.02,hz:0.3,muz:1.05,rank:5,kind:'mg',mounted:true},
 };
 const WEIGHTS=[['UMP45',20],['M416',17],['AKM',19],['S686',15],['P92',15],['Kar98k',24]];
 const AMMO_COL={'9mm':0xe8c35a,'5.56':0x7fc65a,'7.62':0xe0873a,'12G':0xcc4b45,'MG':0x9aa0a6};
@@ -2136,7 +2153,11 @@ function renderDmScore(){
 function dmSpawnPos(team){ return pick(DM_SPAWN[team].front); }
 function dmPlaceAtSpawn(a){
   const p=dmSpawnPos(a.team);
-  a.pos.set(p.x,dmGroundY(p.x)+0.1,p.z);a.yaw=a.team===0?Math.PI/2:-Math.PI/2;a.pitch=0;
+  // yaw sign: forward = (-sin(yaw),0,-cos(yaw)) (see movement code) - team0's bunker sits on the
+  // negative-x side and needs to face +x (into the arena, toward team1), which is yaw=-PI/2, not
+  // +PI/2 (that pointed -x, back into their own mountain wall - everyone was spawning facing away
+  // from the fight, most noticeable once the MG mount locked the view to this same wrong direction)
+  a.pos.set(p.x,dmGroundY(p.x)+0.1,p.z);a.yaw=a.team===0?-Math.PI/2:Math.PI/2;a.pitch=0;
   a.state='ground';a.onGround=true;a.vy=0;a.stance='stand';a.alive=true;a.hp=100;a.deadT=0;
   dmEquip(a);
   if(!a.isPlayer&&a.brain){a.brain.target=null;a.brain.path=[];a.brain.mode='none';}
@@ -2159,16 +2180,21 @@ function mountMG(p,mg){
   }
   mg.occupant=p; p.mg=mg;
   p.mgPrevSlot=p.slots[p.cur];
-  p.slots[p.cur]={key:'MG',mag:WEAPONS.MG.mag};
+  // the belt's remaining rounds live on the mg itself (mg.mag), not a fresh WEAPONS.MG.mag every
+  // time - otherwise dismounting and remounting was a free instant reload, skipping the real one
+  p.slots[p.cur]={key:'MG',mag:mg.mag===undefined?WEAPONS.MG.mag:mg.mag};
   p.ammo.MG=Infinity;
   p.pos.set(mg.x,mg.y,mg.z); p.yaw=mg.yaw; p.pitch=0; p.stance='crouch'; p.vy=0; p.onGround=true; p.reloadT=0;
+  if(mg.mesh) mg.mesh.rotation.y=mg.yaw+Math.PI;
 }
 function dismountMG(p){
   const mg=p.mg; if(!mg) return;
+  const w=p.slots[p.cur]; if(w&&w.key==='MG') mg.mag=w.mag;
   mg.occupant=null; p.mg=null;
   p.slots[p.cur]=p.mgPrevSlot||null; p.mgPrevSlot=null;
   p.ammo.MG=0; p.reloadT=0;
   if(!p.slots[p.cur]){const s=p.slots.findIndex(Boolean);if(s>=0)p.cur=s;}
+  if(mg.mesh) mg.mesh.rotation.y=mg.yaw+Math.PI;
 }
 function dmKill(v,k,wname,head){
   if(v.mg) dismountMG(v);
@@ -2750,7 +2776,7 @@ function updatePlayer(dt){
     if(!p.vault) moveActor(p,mx*sp,mz*sp,dt);
   }
   // tripod-mounted: no walking away from it - pin position/verticals exactly, every frame
-  if(p.mg){p.pos.x=p.mg.x;p.pos.y=p.mg.y;p.pos.z=p.mg.z;p.vy=0;p.onGround=true;}
+  if(p.mg){p.pos.x=p.mg.x;p.pos.y=p.mg.y;p.pos.z=p.mg.z;p.vy=0;p.onGround=true;if(p.mg.mesh)p.mg.mesh.rotation.y=p.yaw+Math.PI;}
   if(!p.mg){
     if(pressed.has('Digit1'))switchTo(p,0);
     if(pressed.has('Digit2'))switchTo(p,1);
@@ -2877,6 +2903,11 @@ function chooseWeapon(b,dist){
     let sc=d.rank; if(d.kind==='shotgun')sc+=dist<12?4:dist>30?-3:0;
     if(d.kind==='sniper')sc+=dist>(G.dm?26:45)?(G.dm?4:3):dist<15?-2:0;
     if(d.kind==='dmr')sc+=dist>(G.dm?14:25)?(G.dm?3:2):dist<10?-2:0;
+    // role bias: snipers/support lean into the DMR/sniper slot even at closer range than the pure
+    // distance rule would pick it at; assault bots lean just as hard the other way, staying on
+    // rapid-fire even at a range they'd otherwise consider swapping to the slow bolt-action at
+    if(G.dm&&b.dmRole==='sniper'&&(d.kind==='sniper'||d.kind==='dmr'))sc+=3;
+    if(G.dm&&b.dmRole==='assault'&&(d.kind==='ar'||d.kind==='smg'))sc+=3;
     if(sc>score){score=sc;best=s;}}
   if(best>=0&&best!==b.cur) switchTo(b,best);
 }
@@ -2989,14 +3020,17 @@ function dmBotWander(b){
       B.urgent=true;
       return;
     }
-  } else if(Math.random()<0.02){
+  } else if(b.dmRole==='mg'&&Math.random()<0.15){
+    // only the bot actually assigned to the gun bothers going for it, and goes for it hard - one
+    // dedicated MG gunner per team, not a coin-flip among all of them
     const mg=DM_MGS.find(m=>m.team===b.team&&!m.occupant);
     if(mg){ B.mgTarget=mg; setGoal(b,mg.x,mg.z,'mg'); B.urgent=true; return; }
   }
   if(B.mode==='dm'&&B.path.length) return;
-  // push all the way across to the enemy's side (not just to the middle) so the two teams
-  // actually cross paths instead of drifting in a shared no-man's-land that nobody quite reaches
-  const side=b.team===0?1:-1,mid=DM_OX+side*rnd(12,66),z=DM_OZ+rnd(-40,40);
+  const side=b.team===0?1:-1,z=DM_OZ+rnd(-40,40);
+  // snipers/support hang back near their own side instead of crossing into the open - assault
+  // bots push all the way across to the enemy's side so the two teams actually cross paths
+  const mid=b.dmRole==='sniper'?DM_OX+side*rnd(0,26):DM_OX+side*rnd(12,66);
   setGoal(b,mid,z,'dm');
   B.urgent=true;   // sprint speed while closing distance - this is a TDM, not a stealth crawl
 }
@@ -3027,7 +3061,7 @@ function updateBot(b,dt){
     const pref=prefDist(b),nx=dx/d,nz=dz/d;
     const fwd=d>pref*1.35?1:d<pref*0.55?-0.7:0;
     B.strafeT-=dt;if(B.strafeT<=0){B.strafeT=rnd(0.5,1.5);B.strafe=Math.random()<0.25?0:Math.random()<0.5?-1:1;
-      b.stance=B.strafe===0&&Math.random()<0.65?'crouch':(d>60&&Math.random()<0.15*b.skill?'prone':'stand');}
+      if(!b.mg) b.stance=B.strafe===0&&Math.random()<0.65?'crouch':(d>60&&Math.random()<0.15*b.skill?'prone':'stand');}
     mx=nx*fwd-nz*B.strafe;mz=nz*fwd+nx*B.strafe;speed=b.stance==='prone'?1.05:b.stance==='crouch'?2.6:3.7;
     B.react-=dt;B.warm=Math.max(1,B.warm-dt*1.3);
     if(B.react<=0&&off<0.25&&b.reloadT<=0&&b.healT<=0){
@@ -3065,7 +3099,7 @@ function updateBot(b,dt){
   const l=Math.hypot(mx,mz);if(l>0){mx/=l;mz/=l;}
   if(b.inWater)speed*=0.5;
   moveActor(b,mx*speed,mz*speed,dt);
-  if(b.mg){b.pos.x=b.mg.x;b.pos.y=b.mg.y;b.pos.z=b.mg.z;b.vy=0;b.onGround=true;}
+  if(b.mg){b.pos.x=b.mg.x;b.pos.y=b.mg.y;b.pos.z=b.mg.z;b.vy=0;b.onGround=true;if(b.mg.mesh)b.mg.mesh.rotation.y=b.yaw+Math.PI;}
   // stuck/anti-jam recovery now also runs while fighting (not just while following a path) - a bot
   // that chases a target it can see through a window straight through a doorway and then jams up
   // against an interior wall needs to detour/vault free the same way it already did outside combat
@@ -3569,29 +3603,43 @@ function buildVM(key){
   } else if(key==='S686'){
     const b=new THREE.Mesh(new THREE.SphereGeometry(0.004,8,6),new THREE.MeshBasicMaterial({color:0xd8d2c0}));b.position.set(0,0.032,-0.79);vmGun.add(b);
     vmGun.add(P(gB(.05,.006,.5),0x2a2d30,0,.03,-.5));
+  } else if(key==='MG'){
+    // no optic on a tripod gun - a small plain front bead plus a rear blade, just enough of a metal
+    // marker to aim with (there was previously nothing at all: forced ads hides the normal crosshair
+    // the same way an optic would, but nothing was ever drawn to replace it)
+    const bead=new THREE.Mesh(new THREE.SphereGeometry(0.0045,8,6),new THREE.MeshBasicMaterial({color:0xd4d8d2}));
+    bead.position.set(0,0.032,-1.0);vmGun.add(bead);
+    vmGun.add(P(gB(.006,.03,.006),0x1c1f1c,0,0.09,-0.1));
   }
   vm.add(vmGun);vmKey=key;
 }
 const _vt=new V3();
 function updateViewmodel(dt){
   const p=player,w=p.weapon();
-  const show=(G.fp||G.aimScope)&&p.alive&&p.state==='ground'&&!G.scoped&&!!w&&p.healT<=0&&!p.vault&&!p.inWater;
+  // mounted: the world-space tripod model IS the gun (it swivels to face where the player is
+  // looking, see mountMG/updatePlayer) - showing the normal held view-model on top of that read as
+  // two separate guns, so it's hidden entirely while mounted
+  const show=(G.fp||G.aimScope)&&p.alive&&p.state==='ground'&&!G.scoped&&!!w&&p.healT<=0&&!p.vault&&!p.inWater&&!p.mg;
   vm.visible=show;if(!show)return;
   if(vmKey!==w.key)buildVM(w.key);
   const pistol=WEAPONS[w.key].pistol,ads=G.ads||G.aimScope;
   // eye sits right behind the optic: red dots fill part of the view with their housing
-  const sightY={P92:0.052,Kar98k:0.085,S686:0.032}[w.key]||0.088;
-  const adsZ={P92:-0.3,S686:-0.26,Kar98k:-0.2}[w.key]||-0.085;
+  const sightY={P92:0.052,Kar98k:0.085,S686:0.032,MG:0.05}[w.key]||0.088;
+  const adsZ={P92:-0.3,S686:-0.26,Kar98k:-0.2,MG:-0.16}[w.key]||-0.085;
   const tx=ads?0:pistol?0.1:0.13,ty=ads?-sightY:pistol?-0.13:-0.15,tz=ads?adsZ:pistol?-0.4:-0.32;
   vmBob+=dt*p.moveSpeed*1.8;const mv=Math.min(1,p.moveSpeed/4.5)*(ads?0.2:1);
   const k=Math.min(1,dt*14);
+  // the MG's reload is a belt change, not a full weapon-swap fumble - the normal reload dip/tilt
+  // (meant for a rifle mag) swung its much bulkier held model across most of the screen for the
+  // whole 4.5s reload, so it's toned down to almost nothing here specifically
+  const reloadKick=w.key==='MG'?0.15:1;
   vm.position.x=lerp(vm.position.x,tx+Math.cos(vmBob)*0.012*mv,k);
-  vm.position.y=lerp(vm.position.y,ty-Math.abs(Math.sin(vmBob))*0.016*mv-(p.reloadT>0?0.06:0),k);
+  vm.position.y=lerp(vm.position.y,ty-Math.abs(Math.sin(vmBob))*0.016*mv-(p.reloadT>0?0.06*reloadKick:0),k);
   vm.position.z=lerp(vm.position.z,tz+vmKick*0.05,k*1.5);
   vmKick=Math.max(0,vmKick-dt*7);
   vm.rotation.x=lerp(vm.rotation.x,vmKick*0.18+(p.sprinting?-0.55:0),k);
   vm.rotation.y=lerp(vm.rotation.y,p.sprinting?0.6:0,k);
-  vm.rotation.z=lerp(vm.rotation.z,p.reloadT>0?0.5:0,k);
+  vm.rotation.z=lerp(vm.rotation.z,p.reloadT>0?0.5*reloadKick:0,k);
   const gp=GRIPS[w.key];_vt.fromArray((p.reloadT>0&&Math.sin(p.reloadT*6)>-0.3)||p.boltT>0?gp.m:gp.l);vmHL.position.lerp(_vt,k);
   vmFlash.visible=p.flashT>0;
   animateBolt(vmGun,p.boltT>0?1-p.boltT/BOLT_TIME:1);
@@ -3676,6 +3724,13 @@ function newGameDM(netCfg){
     while(actors.filter(a=>a.team===team).length<DM_TEAM_SIZE){
       const b=makeBot(bi,DM_TEAM_COL[team]);b.id='bot'+(bi++);b.team=team;b.shirtColor=DM_TEAM_COL[team];actors.push(b);
     }
+  }
+  // rough role split per team: one bot mans the MG, a handful hang back and snipe/support from
+  // elevated ground, the rest push and fight in the basin - see dmBotWander/chooseWeapon for how
+  // each role actually behaves
+  for(let team=0;team<2;team++){
+    const bots=actors.filter(a=>a.team===team&&!a.isPlayer&&!a.human);
+    bots.forEach((b,i)=>{ b.dmRole=i===0?'mg':i<4?'sniper':'assault'; });
   }
   for(const a of actors) dmPlaceAtSpawn(a);
   Object.assign(G,{state:'play',paused:false,time:0,ads:false,scoped:false,aimScope:false,scopeToggle:false,recoilAcc:0,camKick:0,dmgDealt:0,hurt:0,bigmap:false,nearLoot:null,nearItems:[],nearSel:0,invOpen:false,lookX:0,lookY:0,hpShown:100,hpGhost:100,ghostHold:0,dm:true});

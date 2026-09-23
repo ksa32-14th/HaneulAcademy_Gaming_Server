@@ -108,7 +108,11 @@ kbd{font-family:var(--disp);font-weight:700;display:inline-flex;align-items:cent
    not flat black - a real scope's housing doesn't actually replace your peripheral vision with a
    solid colour, it just goes soft and dim out there. Masked so the blur/tint only ever applies
    outside the lens - the lens interior itself is untouched, left sharp for the zoomed view. */
-#scope{position:absolute;inset:0;display:none;
+#scope{position:absolute;inset:0;display:none}
+/* CSS mask on #scope itself would also stencil out its DOM children (the reticle svgs), not just
+   its own background/backdrop-filter - hence a dedicated element for the outer blur rather than
+   putting it directly on #scope, so the reticle in the centre stays visible */
+#scopeOuter{position:absolute;inset:0;
   backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
   background:radial-gradient(circle at 50% 50%,transparent 0,transparent 30.5vmin,rgba(70,76,70,.55) 31.2vmin,rgba(18,20,18,.55) 33vmin,rgba(4,4,4,.4) 46vmin);
   -webkit-mask-image:radial-gradient(circle at 50% 50%,transparent 0,transparent 30.3vmin,#000 31.5vmin);
@@ -273,7 +277,7 @@ body.touch #minimap{pointer-events:auto;cursor:pointer;position:relative;z-index
   <div id="hud" class="hud" hidden>
     <div id="blueTint"></div>
     <div id="vignette"></div>
-    <div id="scope"><svg id="scopeKar" viewBox="-100 -100 200 200" aria-hidden="true">
+    <div id="scope"><div id="scopeOuter"></div><svg id="scopeKar" viewBox="-100 -100 200 200" aria-hidden="true">
       <g fill="#0c0d0c"><rect x="-2.4" y="-100" width="4.8" height="62"/><rect x="-2.4" y="38" width="4.8" height="62"/><rect x="-100" y="-2.4" width="62" height="4.8"/><rect x="38" y="-2.4" width="62" height="4.8"/></g>
       <g stroke="#0c0d0c" stroke-width="0.55"><line x1="-38" y1="0" x2="38" y2="0"/><line x1="0" y1="-38" x2="0" y2="38"/>
         <line x1="-10" y1="-2" x2="-10" y2="2"/><line x1="-20" y1="-2.6" x2="-20" y2="2.6"/><line x1="-30" y1="-2" x2="-30" y2="2"/>

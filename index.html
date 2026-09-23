@@ -103,8 +103,16 @@ kbd{font-family:var(--disp);font-weight:700;display:inline-flex;align-items:cent
 .med{font-size:12.5px;padding:4px 12px 4px 5px;display:flex;align-items:center;border-radius:999px}
 .med kbd{height:20px;min-width:20px;font-size:11px;margin-right:7px;border-radius:999px}
 .med b{font-family:var(--disp);margin-left:8px}
-/* 6x (Kar98k) scope: eyepiece rim, dark tube, lens vignette and a duplex reticle with mil ticks */
-#scope{position:absolute;inset:0;display:none;background:radial-gradient(circle at 50% 50%,transparent 0,transparent 30.5vmin,rgba(70,76,70,.55) 31.2vmin,rgba(18,20,18,.97) 32.6vmin,#060606 38vmin)}
+/* 6x (Kar98k) scope: eyepiece rim, lens vignette and a duplex reticle with mil ticks. Everything
+   outside the lens circle is a blurred, darkened glimpse of the world behind it (backdrop-filter),
+   not flat black - a real scope's housing doesn't actually replace your peripheral vision with a
+   solid colour, it just goes soft and dim out there. Masked so the blur/tint only ever applies
+   outside the lens - the lens interior itself is untouched, left sharp for the zoomed view. */
+#scope{position:absolute;inset:0;display:none;
+  backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+  background:radial-gradient(circle at 50% 50%,transparent 0,transparent 30.5vmin,rgba(70,76,70,.55) 31.2vmin,rgba(18,20,18,.55) 33vmin,rgba(4,4,4,.4) 46vmin);
+  -webkit-mask-image:radial-gradient(circle at 50% 50%,transparent 0,transparent 30.3vmin,#000 31.5vmin);
+  mask-image:radial-gradient(circle at 50% 50%,transparent 0,transparent 30.3vmin,#000 31.5vmin)}
 #scope::before{content:"";position:absolute;left:50%;top:50%;width:62vmin;height:62vmin;transform:translate(-50%,-50%);border-radius:50%;background:radial-gradient(circle,rgba(160,200,220,.04) 0,transparent 55%,rgba(0,0,0,.35) 100%)}
 #scope svg{position:absolute;left:50%;top:50%;width:62vmin;height:62vmin;transform:translate(-50%,-50%)}
 #scope #scopeMk14,#scope #scopeUmp{display:none}
@@ -1554,7 +1562,7 @@ const AMMO_COL={'9mm':0xe8c35a,'5.56':0x7fc65a,'7.62':0xe0873a,'12G':0xcc4b45,'M
 const ARMOR=[0,0.3,0.4,0.55];
 const LV_COL=[0x55603f,0x6f7a52,0x4f6f8f,0x3e3a4a];
 function pickWeighted(list){let s=list.reduce((a,b)=>a+b[1],0),r=Math.random()*s;for(const [k,w] of list){r-=w;if(r<=0)return k;}return list[0][0];}
-function gunModel(key){
+function gunModel(key,scopeOn){
   const g=new THREE.Group(),K=0x23272b,Mt=0x3b4147,W=0x7b4b2a;
   const add=(...ms)=>ms.forEach(m=>g.add(m));
   switch(key){
@@ -1572,7 +1580,17 @@ function gunModel(key){
     case'MK14':add(P(gB(.058,.085,.5),K,0,0,-.08),P(gC(.011,.34),K,0,.02,-.64),P(gC(.017,.05),Mt,0,.02,-.86),P(gB(.05,.06,.22),Mt,0,.008,-.34),P(gB(.036,.15,.07),K,0,-.11,-.12,.2),P(gB(.03,.24,.055),K,0,-.2,-.09),P(gB(.045,.055,.34),Mt,0,-.03,.26),P(gB(.05,.02,.05),K,0,-.085,.34),P(gC(.017,.28),K,0,.075,-.16));break;
     case'MG':add(P(gB(.075,.1,.68),K,0,0,-.08),P(gC(.015,.46),K,0,.025,-.8),P(gB(.09,.11,.12),Mt,.11,-.01,-.05),P(gB(.05,.16,.08),K,0,-.13,-.12,.18),P(gB(.06,.1,.3),K,0,-.03,.26),P(gB(.02,.09,.02),K,.03,.075,-.02),P(gB(.16,.015,.02),K,.03,.12,-.02),P(gB(.02,.26,.02),Mt,-.05,-.16,-.68,0.35),P(gB(.02,.26,.02),Mt,.05,-.16,-.68,-0.35));break;
   }
-  if(WEAPONS[key].dot){ // 1.5x red-dot sight: rail mount + hood
+  // UMP45's switchable 3x sits on the same rail mount but reads as a distinct optic - a longer
+  // tube with visible lenses at both ends instead of the plain dot-sight hood - so anyone watching
+  // from outside can actually tell the scope is on, not just the person looking through it
+  if(key==='UMP45'&&scopeOn){
+    const Lg=0x1a1c1e,glass=new THREE.MeshBasicMaterial({color:0x5b8fb0});
+    add(P(gB(.03,.02,.07),K,0,.055,-.09),
+      P(gC(.012,.05),K,0,.075,-.09,1.5708),          // short vertical post up to the tube
+      P(gC(.021,.16),Lg,0,.1,-.09),                  // main tube, gC's own axis already runs fwd/back
+      P(geo('scLensF',()=>new THREE.CylinderGeometry(.017,.017,.006,14)),glass,0,.1,-.17,1.5708),
+      P(geo('scLensB',()=>new THREE.CylinderGeometry(.017,.017,.006,14)),glass,0,.1,-.01,1.5708));
+  } else if(WEAPONS[key].dot){ // 1.5x red-dot sight: rail mount + hood
     add(P(gB(.03,.02,.07),K,0,.055,-.09),P(geo('rdHood',()=>{const q=new THREE.CylinderGeometry(.024,.024,.06,14,1,true);q.rotateX(Math.PI/2);return q;}),K,0,.088,-.09));
   }
   return g;
@@ -2665,12 +2683,22 @@ addEventListener('keydown',e=>{
 });
 addEventListener('keyup',e=>{keys[e.code]=false;});
 addEventListener('blur',()=>{for(const k in keys)keys[k]=false;mouse.left=mouse.right=false;});
+// scoped look sensitivity used to be a flat /4 for every scope regardless of its actual zoom, so a
+// 3x/4x optic turned just as slowly as a 6x one even though it's magnifying the view far less -
+// scale the divisor with the weapon's own current zoom instead (calibrated so 6x still lands on the
+// old /4 exactly, unchanged) so lower-power scopes turn noticeably faster, like they should.
+function scopeSensDiv(){
+  const w=player&&player.weapon(),def=w?WEAPONS[w.key]:null;
+  if(!def) return 4;
+  const wz=(def.altZoom&&player.scopeAlt)?def.altZoom:def.zoom;
+  return wz*(4/6);
+}
 const cvs=renderer.domElement;
 addEventListener('mousemove',e=>{
   if(G.state!=='play'||G.paused||G.invOpen||!player||!player.alive) return;
   if(!G.locked&&!G.noLock) return;
   const aiming=G.scoped||G.ads||G.aimScope;
-  const s=0.0022*G.sens.main*(aiming?G.sens.aim:1)/(G.scoped?4:aiming?1.6:1);
+  const s=0.0022*G.sens.main*(aiming?G.sens.aim:1)/(G.scoped?scopeSensDiv():aiming?1.6:1);
   // Chrome occasionally reports a huge bogus delta under pointer lock: drop it instead of snapping the view
   if(Math.abs(e.movementX)>350||Math.abs(e.movementY)>350)return;
   G.lookX-=e.movementX*s;G.lookY-=e.movementY*s;   // applied smoothly once per frame (applyLook)
@@ -2750,7 +2778,7 @@ function wireDragLook(el){
     const dx=e.clientX-lastX,dy=e.clientY-lastY; lastX=e.clientX; lastY=e.clientY;
     if(G.state!=='play'||G.paused||G.invOpen||!player||!player.alive) return;
     const aiming=G.scoped||G.ads||G.aimScope;
-    const s=0.0022*G.sens.main*(aiming?G.sens.aim:1)/(G.scoped?4:aiming?1.6:1);
+    const s=0.0022*G.sens.main*(aiming?G.sens.aim:1)/(G.scoped?scopeSensDiv():aiming?1.6:1);
     G.lookX-=dx*s;G.lookY-=dy*s;
   });
   const clear=e=>{ if(e.pointerId===id) id=null; };
@@ -3301,9 +3329,10 @@ function actorTick(a,dt){
   if(!g.visible) return;
   g.position.copy(a.pos);g.rotation.y=a.yaw;
   if(a.inWater&&a.state==='ground')g.position.y=a.pos.y-0.3;
-  // weapon model
-  const w=a.weapon(),key=w?w.key:null;
-  if(u.gunKey!==key){if(u.gun)u.gunHold.remove(u.gun);u.gun=key?gunModel(key):null;if(u.gun)u.gunHold.add(u.gun);u.gunKey=key;
+  // weapon model - also rebuilt on a scope toggle (not just a weapon switch), so switching UMP45's
+  // 3x on/off actually shows up on the model anyone else sees, not just the shooter's own HUD
+  const w=a.weapon(),key=w?w.key:null,scopeOn=!!a.scopeAlt;
+  if(u.gunKey!==key||u.gunScopeOn!==scopeOn){if(u.gun)u.gunHold.remove(u.gun);u.gun=key?gunModel(key,scopeOn):null;if(u.gun)u.gunHold.add(u.gun);u.gunKey=key;u.gunScopeOn=scopeOn;
     const L=key?WEAPONS[key].muz:0;u.flash.position.set(0,0.01,-L);}
   if(u.gun)animateBolt(u.gun,a.boltT>0?1-a.boltT/BOLT_TIME:1);
   // armor visuals
@@ -3533,7 +3562,11 @@ function updateHUD(dt){
   const w=p.weapon();
   hud.scope.classList.toggle('mk14',G.scoped&&!!w&&w.key==='MK14');
   hud.scope.classList.toggle('ump3x',G.scoped&&!!w&&w.key==='UMP45');
-  const sights=G.aimScope||(G.fp&&G.ads);
+  // sights (iron sights on the held view-model) normally stand in for the crosshair while aiming -
+  // but mounted, the view-model is hidden entirely (the world-space tripod gun is the only visible
+  // gun) so there was nothing at all showing the mount's actual aim point. The crosshair covers for
+  // it while mounted instead of being suppressed like it is for every other weapon's ADS.
+  const sights=G.aimScope||(G.fp&&G.ads&&!p.mg);
   hud.cross.style.display=G.scoped||sights||p.state!=='ground'||!p.alive?'none':'block';
   $('rdot').hidden=true;
   if(w){
@@ -3746,7 +3779,7 @@ const fpScene=new THREE.Scene(),fpCam=new THREE.PerspectiveCamera(58,innerWidth/
 fpScene.add(new THREE.HemisphereLight(0xe8f2ff,0x56663a,0.85));
 {const l=new THREE.DirectionalLight(0xfff0d2,0.65);l.position.set(0.6,1,0.4);fpScene.add(l);}
 const vm=new THREE.Group();vm.visible=false;vm.position.set(0.13,-0.15,-0.32);fpScene.add(vm);
-let vmKey=null,vmGun=null,vmHL=null,vmKick=0,vmBob=0;
+let vmKey=null,vmScopeOn=null,vmGun=null,vmHL=null,vmKick=0,vmBob=0;
 const vmFlash=new THREE.Mesh(new THREE.SphereGeometry(0.04,8,6),new THREE.MeshBasicMaterial({color:0xffd27a}));
 function vmHand(sleeve,s){
   const g=new THREE.Group();
@@ -3757,15 +3790,17 @@ function vmHand(sleeve,s){
   cuff.rotation.copy(fa.rotation);g.add(cuff);
   return g;
 }
-function buildVM(key){
+function buildVM(key,scopeOn){
   if(vmGun)vm.remove(vmGun);
-  vmGun=new THREE.Group();vmGun.add(gunModel(key));
+  vmGun=new THREE.Group();vmGun.add(gunModel(key,scopeOn));
   const gp=GRIPS[key],sleeve=0x2f4f6f;
   const hr=vmHand(sleeve,1);hr.position.fromArray(gp.r);vmHL=vmHand(sleeve,-1);vmHL.position.fromArray(gp.l);
   vmGun.add(hr,vmHL);vmFlash.position.set(0,0.01,-WEAPONS[key].muz);vmGun.add(vmFlash);
   // sight hardware seen when aiming down sights
   const W_=WEAPONS[key],dark=new THREE.MeshLambertMaterial({color:0x1b1e21,side:THREE.DoubleSide});
-  if(W_.dot){
+  // UMP45 with its 3x switched on already got its scope tube from gunModel() above - skip the
+  // red-dot hardware here, it has nowhere to sit without the hood the dot version would've built
+  if(W_.dot&&!(key==='UMP45'&&scopeOn)){
     vmGun.traverse(m=>{if(m.isMesh&&m.geometry===GC.rdHood)m.material=dark;});
     const lens=new THREE.Mesh(new THREE.CircleGeometry(0.023,24),new THREE.MeshBasicMaterial({color:0x7fd0c0,transparent:true,opacity:0.12,depthWrite:false}));
     lens.position.set(0,0.088,-0.1);vmGun.add(lens);
@@ -3797,7 +3832,7 @@ function updateViewmodel(dt){
   // two separate guns, so it's hidden entirely while mounted
   const show=(G.fp||G.aimScope)&&p.alive&&p.state==='ground'&&!G.scoped&&!!w&&p.healT<=0&&!p.vault&&!p.inWater&&!p.mg;
   vm.visible=show;if(!show)return;
-  if(vmKey!==w.key)buildVM(w.key);
+  if(vmKey!==w.key||vmScopeOn!==!!p.scopeAlt){buildVM(w.key,!!p.scopeAlt);vmScopeOn=!!p.scopeAlt;}
   const pistol=WEAPONS[w.key].pistol,ads=G.ads||G.aimScope;
   // eye sits right behind the optic: red dots fill part of the view with their housing
   const sightY={P92:0.052,Kar98k:0.085,S686:0.032,MG:0.05}[w.key]||0.088;

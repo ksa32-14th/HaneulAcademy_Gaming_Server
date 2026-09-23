@@ -114,8 +114,8 @@ kbd{font-family:var(--disp);font-weight:700;display:inline-flex;align-items:cent
 #scope.mk14 #scopeKar{display:none}
 #scope.mk14 #scopeMk14{display:block}
 #scope.mk14::after{content:"";position:absolute;inset:0;backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px);
-  mask-image:radial-gradient(circle at 50% 50%,transparent 0,transparent 20vmin,#000 26vmin,#000 31vmin,transparent 33vmin);
-  -webkit-mask-image:radial-gradient(circle at 50% 50%,transparent 0,transparent 20vmin,#000 26vmin,#000 31vmin,transparent 33vmin)}
+  mask-image:radial-gradient(circle at 50% 50%,transparent 0,transparent 29.5vmin,#000 31.5vmin,#000 34vmin,transparent 36vmin);
+  -webkit-mask-image:radial-gradient(circle at 50% 50%,transparent 0,transparent 29.5vmin,#000 31.5vmin,#000 34vmin,transparent 36vmin)}
 #vignette{position:absolute;inset:0;background:radial-gradient(ellipse at center,transparent 45%,rgba(190,20,10,.6) 100%);opacity:0}
 #blueTint{position:absolute;inset:0;background:radial-gradient(ellipse at center,rgba(60,110,255,.05) 30%,rgba(60,110,255,.42) 100%);opacity:0;transition:opacity .5s}
 #dmgDir{position:absolute;left:50%;top:50%;width:180px;height:180px;margin:-90px 0 0 -90px;opacity:0}
@@ -221,6 +221,8 @@ body.dmSplit #bigmap{left:27vw}
 #dmWeap h3{margin:0;font-family:var(--disp);font-size:12px;letter-spacing:.14em;color:var(--muted);font-weight:600}
 #dmWeap .invList button{pointer-events:auto}
 #dmWeap .invList button.sel{background:rgba(242,179,61,.2);border-color:rgba(242,179,61,.75)}
+#dmWeap .gicon{flex:0 0 auto;width:44px;height:20px}
+#dmWeap .gicon rect{fill:#eceff0}
 #dmScore{pointer-events:none;position:absolute;top:50%;right:5vw;transform:translateY(-50%);width:min(340px,40vw);padding:22px 24px;border-radius:22px;display:flex;flex-direction:column;gap:14px}
 #dmScore .dmScoreGrp{display:flex;flex-direction:column;gap:3px}
 #dmScore h3{margin:0 0 4px;font-family:var(--disp);font-size:12px;letter-spacing:.14em;color:var(--muted);font-weight:600}
@@ -263,8 +265,7 @@ body.touch #minimap{pointer-events:auto;cursor:pointer;position:relative;z-index
     </svg><svg id="scopeMk14" viewBox="-100 -100 200 200" aria-hidden="true">
       <circle cx="0" cy="0" r="34" fill="none" stroke="#0c0d0c" stroke-width="1.1"/>
       <circle cx="0" cy="0" r="34" fill="none" stroke="#ff5a3c" stroke-width="0.35" opacity="0.55"/>
-      <g stroke="#0c0d0c" stroke-width="1.4"><line x1="0" y1="-96" x2="0" y2="-16"/><line x1="-96" y1="0" x2="-16" y2="0"/><line x1="96" y1="0" x2="16" y2="0"/></g>
-      <path d="M0,-7 L8,9 L-8,9 Z" fill="#0c0d0c"/>
+      <g stroke="#0c0d0c" stroke-width="1.4"><line x1="0" y1="-96" x2="0" y2="-16"/><line x1="0" y1="16" x2="0" y2="96"/><line x1="-96" y1="0" x2="-16" y2="0"/><line x1="96" y1="0" x2="16" y2="0"/></g>
       <circle cx="0" cy="0" r="1.8" fill="#ff3b30"/>
     </svg></div>
     <canvas id="compass" width="440" height="34"></canvas>
@@ -322,7 +323,7 @@ body.touch #minimap{pointer-events:auto;cursor:pointer;position:relative;z-index
   <canvas id="bigmap" hidden></canvas>
   <div id="dmWeap" class="panel" hidden>
     <div class="eyebrow">무기 변경</div>
-    <div class="dmWeapGrp"><h3>자동소총</h3><div id="dmWeapAR" class="invList"></div></div>
+    <div class="dmWeapGrp"><h3>권총 · 기관단총 · 돌격소총</h3><div id="dmWeapAR" class="invList"></div></div>
     <div class="dmWeapGrp"><h3>저격 · DMR</h3><div id="dmWeapDMR" class="invList"></div></div>
     <p class="note">Tab 키를 다시 누르면 닫힙니다</p>
   </div>
@@ -1104,7 +1105,7 @@ LOOT_SPOTS.forEach(s=>{if(s.y===null)s.y=heightAt(s.x,s.z);});
 // bases facing each other across it. Built once at load (like the BR island), just parked at a
 // huge offset - see DM_OX/inDM above. Uses srand()/sr() exclusively (never Math.random()) so every
 // peer in a networked match generates the exact same layout.
-let DM_SPAWN=null,DM_BUNKERS=null;
+let DM_SPAWN=null,DM_BUNKERS=null,DM_MGS=null;
 // lightweight footprints for the DM minimap/bigmap (BLD already covers building()'s houses/sheds,
 // but containers and sandbag runs never go through building() - collect their own markers)
 const DM_PROPS=[];
@@ -1265,12 +1266,13 @@ function buildDeathmatchMap(){
     sandbagRun('z',bx,DM_OZ-16,DM_OZ-5,null,dmGroundY(bx));
     sandbagRun('z',bx,DM_OZ+5,DM_OZ+16,null,dmGroundY(bx));
   }
-  // a broken line of cover roughly down the middle of the arena, mixing tall HESCO-style barriers
-  // with sandbag runs, so the map *reads* as split into two halves - several gaps left to cross
-  // through, not one continuous wall sealing the whole boundary
-  for(const[z0,z1,kind]of[[-34,-24,'hesco'],[-16,-5,'sand'],[5,16,'sand'],[24,34,'hesco']]){
+  // a broken line of tall cover roughly down the middle of the arena, so the map *reads* as split
+  // into two halves - several gaps left to cross through, not one continuous wall sealing the whole
+  // boundary. All HESCO now (was half sandbag) and taller than the default, plus two more segments
+  // reaching further toward the map edges - more central cover to hold and fight over.
+  for(const[z0,z1]of[[-40,-34],[-34,-24],[-16,-5],[5,16],[24,34],[34,40]]){
     const xj=DM_OX+sr(-2,2),gy=dmGroundY(xj);
-    if(kind==='hesco') bigWall('z',xj,z0,z1,null,gy); else sandbagRun('z',xj,z0,z1,null,gy);
+    bigWall('z',xj,z0,z1,3.2,gy);
   }
   // two sealed respawn bunkers (one per team) - there is no door, so nobody ever walks in; players
   // only ever arrive here by being teleported in in dmRespawn(). Plain concrete with a wide
@@ -1293,11 +1295,26 @@ function buildDeathmatchMap(){
   }
   DM_BUNKERS=[bunker(-BASE_DX,0),bunker(BASE_DX,1)];
   // hilltop firing positions: a light scattering of sandbag cover behind each base so the new
-  // elevated ground actually reads as a place to hold and shoot down from, not empty high ground
+  // elevated ground actually reads as a place to hold and shoot down from, not empty high ground -
+  // plus a mounted MG right at the centre of each, usable with F (see mountMG/updatePlayer)
+  DM_MGS=[];
   for(const side of [-1,1]){
-    const hx=DM_OX+side*80,gy=dmGroundY(hx);
+    const hx=DM_OX+side*80,gy=dmGroundY(hx),yaw=side<0?Math.PI/2:-Math.PI/2;
     sandbagRun('z',hx,DM_OZ-15,DM_OZ-4,1.5,gy);
     sandbagRun('z',hx,DM_OZ+4,DM_OZ+15,1.5,gy);
+    const grp=new THREE.Group(),legCol=0x2c2e2a,gunCol=0x23272b;
+    grp.add(
+      P(gB(.05,.9,.05),legCol,0,.45,-.35,0.35),
+      P(gB(.05,.9,.05),legCol,-.3,.45,.2,-0.5),
+      P(gB(.05,.9,.05),legCol,.3,.45,.2,-0.5),
+      P(gB(.14,.16,1.1),gunCol,0,.95,.1),
+      P(gC(.035,.7),gunCol,0,.98,.75),
+      P(gB(.16,.2,.22),0x3b4147,.16,.9,.2)
+    );
+    grp.position.set(hx,gy,DM_OZ);grp.rotation.y=yaw;
+    grp.traverse(m=>{if(m.isMesh){m.castShadow=true;m.receiveShadow=true;}});
+    scene.add(grp);
+    DM_MGS.push({x:hx,y:gy,z:DM_OZ,yaw,team:side<0?0:1,occupant:null});
   }
   const frontSpawns=(localX,face)=>{const pts=[];for(let i=0;i<18;i++)pts.push({x:DM_OX+localX+face*sr(8,14),z:DM_OZ+sr(-18,18)});return pts;};
   DM_SPAWN=[
@@ -1399,9 +1416,13 @@ const WEAPONS={
   // DMR: semi-auto, faster follow-up shots than a bolt gun but less alpha damage than Kar98k -
   // Deathmatch-exclusive (not in WEIGHTS, so it never turns up in battle royale loot)
   MK14:  {name:'MK14',  ammo:'7.62',dmg:48,rpm:280,auto:false,mag:16,spread:0.024,reload:2.8,range:450,zoom:4,  pellets:1,recoil:0.055,hz:0.4,muz:0.98,rank:5,kind:'dmr',scope:true},
+  // mounted hilltop MG (deathmatch only, see DM_MGS/mountMG): never lootable, always installed into
+  // whichever slot the player was holding while they mount it. Tight spread even from the hip since
+  // it's tripod-stabilised, and default-aimed (mountMG forces G.ads) on top of that.
+  MG:    {name:'거치기관총',ammo:'MG',dmg:38,rpm:650,auto:true,mag:50,spread:0.017,reload:4.5,range:500,zoom:1,pellets:1,recoil:0.02,hz:0.3,muz:1.05,rank:5,kind:'mg',mounted:true},
 };
 const WEIGHTS=[['UMP45',20],['M416',17],['AKM',19],['S686',15],['P92',15],['Kar98k',24]];
-const AMMO_COL={'9mm':0xe8c35a,'5.56':0x7fc65a,'7.62':0xe0873a,'12G':0xcc4b45};
+const AMMO_COL={'9mm':0xe8c35a,'5.56':0x7fc65a,'7.62':0xe0873a,'12G':0xcc4b45,'MG':0x9aa0a6};
 const ARMOR=[0,0.3,0.4,0.55];
 const LV_COL=[0x55603f,0x6f7a52,0x4f6f8f,0x3e3a4a];
 function pickWeighted(list){let s=list.reduce((a,b)=>a+b[1],0),r=Math.random()*s;for(const [k,w] of list){r-=w;if(r<=0)return k;}return list[0][0];}
@@ -1421,6 +1442,7 @@ function gunModel(key){
     }
     case'P92':add(P(gB(.035,.045,.19),Mt,0,.02,-.06),P(gB(.032,.1,.045),K,0,-.04,0,-.25));break;
     case'MK14':add(P(gB(.058,.085,.5),K,0,0,-.08),P(gC(.011,.34),K,0,.02,-.64),P(gC(.017,.05),Mt,0,.02,-.86),P(gB(.05,.06,.22),Mt,0,.008,-.34),P(gB(.036,.15,.07),K,0,-.11,-.12,.2),P(gB(.03,.24,.055),K,0,-.2,-.09),P(gB(.045,.055,.34),Mt,0,-.03,.26),P(gB(.05,.02,.05),K,0,-.085,.34),P(gC(.017,.28),K,0,.075,-.16));break;
+    case'MG':add(P(gB(.075,.1,.68),K,0,0,-.08),P(gC(.015,.46),K,0,.025,-.8),P(gB(.09,.11,.12),Mt,.11,-.01,-.05),P(gB(.05,.16,.08),K,0,-.13,-.12,.18),P(gB(.06,.1,.3),K,0,-.03,.26),P(gB(.02,.09,.02),K,.03,.075,-.02),P(gB(.16,.015,.02),K,.03,.12,-.02),P(gB(.02,.26,.02),Mt,-.05,-.16,-.68,0.35),P(gB(.02,.26,.02),Mt,.05,-.16,-.68,-0.35));break;
   }
   if(WEAPONS[key].dot){ // 1.5x red-dot sight: rail mount + hood
     add(P(gB(.03,.02,.07),K,0,.055,-.09),P(geo('rdHood',()=>{const q=new THREE.CylinderGeometry(.024,.024,.06,14,1,true);q.rotateX(Math.PI/2);return q;}),K,0,.088,-.09));
@@ -1437,6 +1459,7 @@ const GRIPS={
   Kar98k:{r:[0,-0.07,0.13],l:[0,-0.055,-0.3],m:[0.05,0.03,0]},
   P92:{r:[0,-0.06,0.005],l:[-0.02,-0.065,0.015],m:[0,-0.09,0]},
   MK14:{r:[0,-0.1,0.06],l:[0,-0.03,-0.32],m:[0,-0.2,-0.09]},
+  MG:{r:[0,-0.13,0.16],l:[0,-0.05,-0.55],m:[0.11,-0.05,-0.05]},
 };
 const _ik={S:new V3(),n:new V3(),p:new V3(),u:new V3(),E:new V3(),f:new V3(),x:new V3(),y:new V3(),z:new V3(),m:new THREE.Matrix4(),T:new V3()};
 // analytic two-bone IK in the spine's space; pole hints where the elbow points
@@ -1789,6 +1812,7 @@ const GUNSND={
   S686:{f:1800,bd:0.09,low:0.9,crack:0.5,vol:1,tail:1.25},
   Kar98k:{f:2900,bd:0.07,low:0.7,crack:1.4,vol:1,tail:1.5,bolt:true},
   MK14:{f:2700,bd:0.065,low:0.6,crack:1.2,vol:0.95,tail:1.2},
+  MG:{f:2100,bd:0.08,low:0.9,crack:1.1,vol:1.05,tail:1.4},
 };
 function shotSound(pos,key,own){
   if(!AC||!player) return;
@@ -1909,8 +1933,10 @@ function pickup(a,it){
 function startReload(a){
   const w=a.weapon(); if(!w||a.reloadT>0) return;
   const def=WEAPONS[w.key]; if(w.mag>=def.mag||a.ammo[def.ammo]<=0) return;
-  a.reloadT=a.reloadMax=def.reload; a.healT=0;
-  if(a.isPlayer) reloadSound(w.key,def.reload);
+  // deathmatch-only sniper buff: faster reload (see also tryFire's fire-rate/bolt-cycle/damage bumps)
+  const rt=(G.dm&&def.kind==='sniper')?def.reload*0.7:def.reload;
+  a.reloadT=a.reloadMax=rt; a.healT=0;
+  if(a.isPlayer) reloadSound(w.key,rt);
 }
 function finishReload(a){
   const w=a.weapon(); if(!w) return; const def=WEAPONS[w.key];
@@ -1940,9 +1966,10 @@ function tryFire(a,dir,origin){
   const w=a.weapon(); if(!w||a.fireCd>0||a.reloadT>0||a.state!=='ground'||a.vault||a.inWater) return false;
   const def=WEAPONS[w.key];
   if(w.mag<=0){ if(a.ammo[def.ammo]>0) startReload(a); else if(a.isPlayer){dryFire();a.fireCd=0.25;} return false; }
-  w.mag--; a.fireCd=60/def.rpm; a.healT=0; a.flashT=0.05; if(def.bolt)a.boltT=BOLT_TIME;
+  const isSniper=def.kind==='sniper', dmSniper=G.dm&&isSniper;
+  w.mag--; a.fireCd=60/(dmSniper?def.rpm*1.35:def.rpm); a.healT=0; a.flashT=0.05; if(def.bolt)a.boltT=BOLT_TIME*(dmSniper?0.75:1);
   let spread=def.spread;
-  const stF=a.stance==='prone'?0.55:a.stance==='crouch'?0.78:1, isSniper=def.kind==='sniper';
+  const stF=a.stance==='prone'?0.55:a.stance==='crouch'?0.78:1;
   if(a.isPlayer){
     spread*=G.aimScope?(def.scope?0.03:0.3):G.ads?(def.scope?0.3:0.45):1; spread*=(a.moveSpeed>1?1.5:1)*(a.onGround?1:2.4)*stF; spread+=a.bloom;
     a.bloom=Math.min(0.045,a.bloom+def.recoil*0.3);
@@ -1970,7 +1997,7 @@ function tryFire(a,dir,origin){
       const hitPos=_hp.clone(),hitActor=h.actor,hitHead=h.head,hitT=h.t;
       spawnProjectile(o,hitPos,()=>{
         if(hitActor){
-          let dmg=def.dmg; if(hitT>def.range) dmg*=0.7;
+          let dmg=def.dmg; if(dmSniper) dmg*=1.2; if(hitT>def.range) dmg*=0.7;
           if(hitHead) dmg*=2.5;
           damage(hitActor,dmg,a,hitHead,def.name);
           puff(hitPos,true,3);
@@ -2017,14 +2044,16 @@ function damage(v,amount,attacker,head,wname){
   if(v.isPlayer){G.hurt=Math.min(1,G.hurt+amount/40);if(attacker)G.ghostHold=0.45;}
   if(v.hp<=0) kill(v,attacker,wname,head);
 }
-// ---------- deathmatch: fixed AR+DMR loadout, infinite ammo, lvl2 armor, team-kill scoring,
-// timed respawns at a sealed per-team bunker. No loot exists in this mode at all.
-const DM_AR=['M416','AKM'],DM_DMR=['Kar98k','MK14'],DM_TEAM_COL=[0x2f5fa8,0xa8342f],DM_TEAM_SIZE=8;
+// ---------- deathmatch: fixed loadout (one from each group below), infinite ammo, lvl2 armor,
+// team-kill scoring, timed respawns at a sealed per-team bunker. No loot exists in this mode at all.
+// DM_AR now covers every non-shotgun small arm (pistol/smg/ar), not just rifles - the name stuck
+// from before the panel opened up to the full roster, but it's really just "group 1" now.
+const DM_AR=['P92','UMP45','M416','AKM'],DM_DMR=['Kar98k','MK14'],DM_TEAM_COL=[0x2f5fa8,0xa8342f],DM_TEAM_SIZE=8;
 const DM={score:[0,0],timer:0,target:50,limit:900,respawnWait:6,feedQ:[],airstrikeTier:0};
 function dmEquip(a){
   const ld=a.dmLoadout||(a.dmLoadout={ar:DM_AR[0],dmr:DM_DMR[0]});
   a.slots=[{key:ld.ar,mag:WEAPONS[ld.ar].mag},{key:ld.dmr,mag:WEAPONS[ld.dmr].mag},null];
-  a.ammo['5.56']=Infinity;a.ammo['7.62']=Infinity;
+  a.ammo['9mm']=Infinity;a.ammo['5.56']=Infinity;a.ammo['7.62']=Infinity;
   a.vest=2;a.helmet=2;a.bandage=5;a.medkit=0;a.cur=0;
 }
 function dmSetLoadout(a,ar,dmr){
@@ -2032,10 +2061,21 @@ function dmSetLoadout(a,ar,dmr){
   a.dmLoadout={ar:ar||cur.ar,dmr:dmr||cur.dmr};
   dmEquip(a);
 }
-// M-key weapon-swap panel (deathmatch only): pick one AR and one DMR/sniper, applied instantly
+// rough 2D white-outline silhouette for the weapon-swap panel - just enough shape (barrel length,
+// stock, mag, scope hump) to read as "pistol" vs "rifle" vs "sniper" at a glance, not a real model
+function gunIcon(key){
+  const d=WEAPONS[key],k=d.kind,len=k==='pistol'?20:k==='smg'?28:k==='sniper'?50:k==='dmr'?44:36;
+  const body=`<rect x="8" y="9" width="${len}" height="4" rx="1"/>`;
+  const grip=`<rect x="9" y="12" width="4" height="7" rx="1" transform="skewX(-14)"/>`;
+  const stock=k==='pistol'?'':`<rect x="${8+len-2}" y="10.2" width="9" height="2" rx="1"/>`;
+  const mag=k==='sniper'?'':`<rect x="17" y="13" width="4" height="${k==='dmr'?8:6}" rx="1"/>`;
+  const scope=d.scope?`<rect x="${8+len*0.32}" y="4.5" width="9" height="3.6" rx="1"/><rect x="${9+len*0.32}" y="7.6" width="2" height="2.4"/>`:'';
+  return `<svg viewBox="0 0 ${8+len+11} 22" class="gicon" aria-hidden="true">${body}${grip}${stock}${mag}${scope}</svg>`;
+}
+// M-key weapon-swap panel (deathmatch only): pick one from each group, applied instantly
 function renderDMWeap(){
   if(!player||!player.dmLoadout)return;
-  const mk=(key,cur)=>`<button type="button" data-k="${key}" class="${key===cur?'sel':''}">${esc(WEAPONS[key].name)}</button>`;
+  const mk=(key,cur)=>`<button type="button" data-k="${key}" class="${key===cur?'sel':''}">${gunIcon(key)}<span>${esc(WEAPONS[key].name)}</span></button>`;
   $('dmWeapAR').innerHTML=DM_AR.map(k=>mk(k,player.dmLoadout.ar)).join('');
   $('dmWeapDMR').innerHTML=DM_DMR.map(k=>mk(k,player.dmLoadout.dmr)).join('');
   $('dmWeapAR').querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{dmSetLoadout(player,b.dataset.k,null);if(G.net.mode==='client')clientSendInput();renderDMWeap();}));
@@ -2066,7 +2106,28 @@ function dmPlaceAtSpawn(a){
   if(!a.isPlayer&&a.brain){a.brain.target=null;a.brain.path=[];a.brain.mode='none';}
 }
 function dmRespawn(a){ dmPlaceAtSpawn(a); }
+// mounted hilltop MG (deathmatch, player only): F to mount/dismount. Installs the MG into whatever
+// slot was current (restored on dismount), with its own 'MG' ammo pool set to Infinity so the
+// existing mag/reload system just works unmodified - 50 rounds (WEAPONS.MG.mag) per belt, reload
+// via the normal R key once it runs dry. updatePlayer forces G.ads while mounted (always-aimed) and
+// locks position/movement; see the "mounted MG" block there.
+function mountMG(p,mg){
+  if(!mg||mg.occupant||p.mg) return;
+  mg.occupant=p; p.mg=mg;
+  p.mgPrevSlot=p.slots[p.cur];
+  p.slots[p.cur]={key:'MG',mag:WEAPONS.MG.mag};
+  p.ammo.MG=Infinity;
+  p.pos.set(mg.x,mg.y,mg.z); p.yaw=mg.yaw; p.pitch=0; p.stance='stand'; p.vy=0; p.onGround=true; p.reloadT=0;
+}
+function dismountMG(p){
+  const mg=p.mg; if(!mg) return;
+  mg.occupant=null; p.mg=null;
+  p.slots[p.cur]=p.mgPrevSlot||null; p.mgPrevSlot=null;
+  p.ammo.MG=0; p.reloadT=0;
+  if(!p.slots[p.cur]){const s=p.slots.findIndex(Boolean);if(s>=0)p.cur=s;}
+}
 function dmKill(v,k,wname,head){
+  if(v.mg) dismountMG(v);
   v.alive=false;v.hp=0;v.healT=0;v.reloadT=0;v.deadT=0;v.respawnT=DM.respawnWait;v.deaths=(v.deaths||0)+1;
   const u=v.mesh.userData;u.chute.visible=false;u.flash.visible=false;
   if(k&&k.team!==v.team){
@@ -2090,17 +2151,37 @@ function dmCheckWin(){
 // siren + falling bombs + explosions even though their hp only actually changes once the next
 // state sync lands.
 function dmPickAirstrikePts(){
+  // bias toward where players actually are on each side rather than pure uniform-random ground -
+  // jittered around a live actor's own position so most bombs land near an actual fight instead of
+  // routinely landing on empty dirt. Falls back to the old random spread if a side is empty (e.g.
+  // everyone pushed to the other half). Uses Math.random(), not srand() - fine since this only ever
+  // runs on the host/solo side and the resulting points are broadcast as data, not regenerated per peer.
+  const alive=actors.filter(a=>a.alive&&inDM(a.pos.x,a.pos.z));
   const pts=[];
-  for(const side of[-1,1]) for(let i=0;i<5;i++){
-    const x=DM_OX+side*sr(10,68),z=DM_OZ+sr(-DM_HALF_Z+8,DM_HALF_Z-8);
-    pts.push({x,z});
+  for(const side of[-1,1]){
+    const pool=alive.filter(a=>(a.pos.x-DM_OX)*side>=-6);   // a little past centre, so a fight straddling the middle still counts for both sides
+    for(let i=0;i<5;i++){
+      let x,z;
+      if(pool.length){
+        const a=pick(pool);
+        x=clamp(a.pos.x+rnd(-9,9),DM_OX+side*10,DM_OX+side*68);
+        z=clamp(a.pos.z+rnd(-9,9),DM_OZ-DM_HALF_Z+8,DM_OZ+DM_HALF_Z-8);
+      } else { x=DM_OX+side*rnd(10,68); z=DM_OZ+rnd(-DM_HALF_Z+8,DM_HALF_Z-8); }
+      pts.push({x,z});
+    }
   }
   return pts;
 }
 function dmAirstrikeSiren(){
+  // a real air-raid siren wails: a slow, continuous rise then fall, repeated - not a set of short
+  // disconnected blips. tone() only ramps one leg (f->f2) per call, so chain rise/fall legs back to
+  // back (two full up-down cycles) plus a thin noise layer under it for a bit of mechanical grit.
   if(!AC) return;
   const bus=spatial(null,0),t=AC.currentTime;
-  for(let i=0;i<4;i++) tone(t+i*0.4,bus,{type:'sawtooth',f:480,f2:900,dur:0.34,vol:0.1});
+  const legs=[[320,900,1.7],[900,320,1.7],[320,900,1.7],[900,320,1.7]];
+  let tt=t;
+  for(const[f,f2,dur] of legs){ tone(tt,bus,{type:'sawtooth',f,f2,dur,vol:0.16,a:0.15}); tt+=dur; }
+  nz(t,bus,{type:'bandpass',f:600,f2:500,q:0.6,a:0.3,dur:1.6,vol:0.05});
 }
 function dmExplodeAt(p,doDamage){
   const gy=dmGroundY(p.x),pos=new V3(p.x,gy+0.6,p.z);
@@ -2123,7 +2204,7 @@ function dmExplodeAt(p,doDamage){
   }
 }
 function dmPlayAirstrike(pts){
-  bigMsg('공습 경보!','amber',2.2);
+  bigMsg('공습 경보!','amber',3.4);
   dmAirstrikeSiren();
   const doDamage=G.net.mode!=='client';
   // each bomb visibly falls from high overhead and only explodes once it actually lands
@@ -2424,7 +2505,11 @@ function lockFail(){
 document.addEventListener('pointerlockchange',()=>{
   G.locked=document.pointerLockElement===cvs;
   if(G.locked){G.everLocked=true;G.paused=false;$('pause').hidden=true;}
-  else if(G.state==='play'&&!G.noLock&&!G.invOpen){G.paused=true;$('pause').hidden=false;mouse.left=mouse.right=false;}
+  // deathmatch's Tab (weapon panel) and M (map+scoreboard) also release pointer lock on purpose so
+  // their buttons/text are clickable/readable with a real cursor - that used to be indistinguishable
+  // from the player manually breaking lock (e.g. hitting Esc), which this listener treats as "show
+  // the leave-game pause screen", so opening either panel was popping the pause menu every time.
+  else if(G.state==='play'&&!G.noLock&&!G.invOpen&&$('dmWeap').hidden&&!G.bigmap){G.paused=true;$('pause').hidden=false;mouse.left=mouse.right=false;}
 });
 document.addEventListener('pointerlockerror',lockFail);
 
@@ -2542,7 +2627,24 @@ function updatePlayer(dt){
   if(pressed.has('KeyV'))G.fp=!G.fp;
   p.bloom=Math.max(0,p.bloom-dt*0.05);
   if(p.state==='plane'){ p.pos.copy(plane.pos); if(pressed.has('KeyF')) jumpOut(p); return; }
-  const ix=(keys.KeyD?1:0)-(keys.KeyA?1:0), iz=(keys.KeyW?1:0)-(keys.KeyS?1:0);
+  // mounted hilltop MG (deathmatch only): F mounts the nearest free one, or dismounts if already on it
+  if(G.dm){
+    G.nearMG=null;
+    if(!p.mg){
+      let best=null,bd=9;
+      for(const mg of DM_MGS){
+        if(mg.occupant) continue;
+        const d=Math.hypot(p.pos.x-mg.x,p.pos.z-mg.z);
+        if(d<3&&d<bd){bd=d;best=mg;}
+      }
+      G.nearMG=best;
+    }
+    if(pressed.has('KeyF')){
+      if(p.mg) dismountMG(p);
+      else if(G.nearMG) mountMG(p,G.nearMG);
+    }
+  }
+  const ix=p.mg?0:(keys.KeyD?1:0)-(keys.KeyA?1:0), iz=p.mg?0:(keys.KeyW?1:0)-(keys.KeyS?1:0);
   const fx=-Math.sin(p.yaw),fz=-Math.cos(p.yaw),rx=Math.cos(p.yaw),rz=-Math.sin(p.yaw);
   let mx=fx*iz+rx*ix,mz=fz*iz+rz*ix;const ml=Math.hypot(mx,mz);if(ml>0){mx/=ml;mz/=ml;}
   if(p.state==='fall'||p.state==='chute'){
@@ -2553,10 +2655,10 @@ function updatePlayer(dt){
   // right mouse: tap = toggle scope (look down sights), hold = shoulder aim
   const def=p.weapon()?WEAPONS[p.weapon().key]:null;
   if(mouse.rTap){mouse.rTap=false;if(def)G.scopeToggle=!G.scopeToggle;}
-  const wantSprint=(keys.ShiftLeft||keys.ShiftRight)&&iz>0;
+  const wantSprint=!p.mg&&(keys.ShiftLeft||keys.ShiftRight)&&iz>0;
   // stance: C crouch, Z prone (toggles); sprint or Space stands you up
-  if(pressed.has('KeyC')&&!p.vault)p.stance=p.stance==='crouch'?'stand':'crouch';
-  if(pressed.has('KeyZ')&&!p.vault&&p.onGround)p.stance=p.stance==='prone'?'stand':'prone';
+  if(pressed.has('KeyC')&&!p.vault&&!p.mg)p.stance=p.stance==='crouch'?'stand':'crouch';
+  if(pressed.has('KeyZ')&&!p.vault&&p.onGround&&!p.mg)p.stance=p.stance==='prone'?'stand':'prone';
   if(p.inWater||(wantSprint&&!mouse.right&&p.stance!=='stand'&&ml>0))p.stance='stand';
   const standUp=pressed.has('Space')&&p.stance!=='stand';
   if(standUp)p.stance='stand';
@@ -2570,6 +2672,8 @@ function updatePlayer(dt){
   G.aimScope=!boltLock&&(G.scopeToggle||(G.fp&&holdR));
   G.ads=!G.aimScope&&!boltLock&&holdR;
   G.scoped=!!(G.aimScope&&def&&def.scope);
+  // mounted MG: always tripod-stabilised aim, no optic overlay (it has none) regardless of mouse state
+  if(p.mg){G.aimScope=false;G.scoped=false;G.ads=true;}
   const sprint=wantSprint&&!G.ads&&!G.aimScope&&p.healT<=0&&p.stance==='stand';
   let sp=sprint?6.3:G.ads||G.aimScope?2.6:4.4;
   if(p.stance==='crouch')sp=G.ads||G.aimScope?1.7:2.7;
@@ -2590,15 +2694,19 @@ function updatePlayer(dt){
   }
   if(p.vault) updateVault(p,dt);
   else{
-    if(!standUp&&pressed.has('Space')&&p.onGround&&!p.inWater&&!tryVault(p)){p.vy=7.4;p.onGround=false;}
+    if(!standUp&&pressed.has('Space')&&p.onGround&&!p.inWater&&!p.mg&&!tryVault(p)){p.vy=7.4;p.onGround=false;}
     if(!p.vault) moveActor(p,mx*sp,mz*sp,dt);
   }
-  if(pressed.has('Digit1'))switchTo(p,0);
-  if(pressed.has('Digit2'))switchTo(p,1);
-  if(pressed.has('Digit3'))switchTo(p,2);
+  // tripod-mounted: no walking away from it - pin position/verticals exactly, every frame
+  if(p.mg){p.pos.x=p.mg.x;p.pos.y=p.mg.y;p.pos.z=p.mg.z;p.vy=0;p.onGround=true;}
+  if(!p.mg){
+    if(pressed.has('Digit1'))switchTo(p,0);
+    if(pressed.has('Digit2'))switchTo(p,1);
+    if(pressed.has('Digit3'))switchTo(p,2);
+    if(pressed.has('Digit4'))startHeal(p,'bandage');
+    if(pressed.has('Digit5'))startHeal(p,'medkit');
+  }
   if(pressed.has('KeyR'))startReload(p);
-  if(pressed.has('Digit4'))startHeal(p,'bandage');
-  if(pressed.has('Digit5'))startHeal(p,'medkit');
   // nearby items: mouse wheel chooses, F picks up the highlighted one
   G.nearItems=nearLootList(p,2.4,8);
   if(G.nearSel>=G.nearItems.length)G.nearSel=0;
@@ -2709,8 +2817,13 @@ function setGoal(b,x,z,mode,y){
 function hasUsable(b){for(const w of b.slots)if(w&&(w.mag>0||b.ammo[WEAPONS[w.key].ammo]>0))return true;return false;}
 function chooseWeapon(b,dist){
   let best=-1,score=-1;
+  // deathmatch bots lean into sniper/DMR sooner and harder than in BR - a wider window (kicks in at
+  // a shorter distance) and a bigger bonus, so the Kar98k/MK14 actually see use instead of bots
+  // defaulting to their AR-type pick at every distance that isn't extreme long range
   for(let s=0;s<3;s++){const w=b.slots[s];if(!w)continue;const d=WEAPONS[w.key];if(w.mag<=0&&b.ammo[d.ammo]<=0)continue;
-    let sc=d.rank; if(d.kind==='shotgun')sc+=dist<12?4:dist>30?-3:0; if(d.kind==='sniper')sc+=dist>45?3:dist<15?-2:0; if(d.kind==='dmr')sc+=dist>25?2:dist<10?-2:0;
+    let sc=d.rank; if(d.kind==='shotgun')sc+=dist<12?4:dist>30?-3:0;
+    if(d.kind==='sniper')sc+=dist>(G.dm?26:45)?(G.dm?4:3):dist<15?-2:0;
+    if(d.kind==='dmr')sc+=dist>(G.dm?14:25)?(G.dm?3:2):dist<10?-2:0;
     if(sc>score){score=sc;best=s;}}
   if(best>=0&&best!==b.cur) switchTo(b,best);
 }
@@ -3122,13 +3235,15 @@ function updateHUD(dt){
   for(let s=0;s<3;s++){
     const w=p.slots[s];if(!w)continue;
     const d=WEAPONS[w.key];
-    wh+=`<div class="wslot panel${s===p.cur?' act':''}" data-slot="${s}"><span class="n">${s+1}</span><span class="nm">${d.name}</span><span class="am"><b class="${w.mag===0?'empty':''}">${w.mag}</b> / ${p.ammo[d.ammo]}</span></div>`;
+    wh+=`<div class="wslot panel${s===p.cur?' act':''}" data-slot="${s}"><span class="n">${s+1}</span><span class="nm">${d.name}</span><span class="am"><b class="${w.mag===0?'empty':''}">${w.mag}</b> / ${p.ammo[d.ammo]===Infinity?'∞':p.ammo[d.ammo]}</span></div>`;
   }
   setHTML(hud.weap,'weap',wh);
   let pr='';
   if(p.alive){
     if(p.state==='plane')pr='<kbd>F</kbd>낙하';
     else if(p.state==='fall')pr='<kbd>F</kbd>낙하산';
+    else if(p.mg)pr='<kbd>F</kbd>기관총에서 내려오기';
+    else if(G.nearMG)pr='<kbd>F</kbd>기관총 사용';
     else if(G.nearLoot)pr=`<kbd>F</kbd>${esc(lootLabel(G.nearLoot))}`;
   }
   setHTML(hud.prompt,'prompt',pr);hud.prompt.hidden=!pr||G.invOpen;
@@ -3462,6 +3577,7 @@ function newGame(netCfg){
 function newGameDM(netCfg){
   clearGame();
   G.dm=true;DM.score=[0,0];DM.timer=0;DM.feedQ=[];DM.target=50;DM.limit=900;DM.respawnWait=6;DM.airstrikeTier=0;
+  if(DM_MGS)DM_MGS.forEach(m=>m.occupant=null);   // a fresh match rebuilds actors from scratch - drop any stale occupant reference from the last one
   const humans=netCfg?[{id:netCfg.myId,name:netCfg.myName,isMe:true},...netCfg.humans.map(h=>({id:h.id,name:h.name}))]:[{id:'solo',name:'나',isMe:true}];
   humans.forEach((h,i)=>h.team=i%2);
   for(const h of humans){
@@ -3520,6 +3636,7 @@ function netJoinMatch(msg){
 function netJoinMatchDM(msg){
   clearGame();
   G.dm=true;DM.score=[0,0];DM.timer=0;DM.feedQ=[];DM.target=50;DM.limit=900;DM.respawnWait=6;DM.airstrikeTier=0;
+  if(DM_MGS)DM_MGS.forEach(m=>m.occupant=null);
   player=null;
   for(const r of msg.roster){
     const a=new Actor(r.id===G.net.myId,r.name,DM_TEAM_COL[r.team]);

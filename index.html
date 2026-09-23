@@ -361,7 +361,7 @@ body.touch #minimap{pointer-events:auto;cursor:pointer;position:relative;z-index
         <div><kbd>1-3</kbd>무기</div>
         <div><kbd>4</kbd><kbd>5</kbd>회복</div>
         <div><kbd>M</kbd>지도</div>
-        <div><kbd>V</kbd>3인칭</div>
+        <div><kbd>V</kbd>스코프 변경</div>
         <div><kbd>C</kbd>웅크리기</div>
         <div><kbd>Z</kbd>엎드리기</div>
         <div><kbd>Q</kbd><kbd>E</kbd>기울이기</div>
@@ -1517,7 +1517,10 @@ function rayCast(o,d,maxT,ignore,noActors,noTerrain){
 const WEAPONS={
   // recoil: radians of muzzle climb per shot; hz: sideways kick scale; zoom: magnification in scope mode
   P92:   {name:'P92',   ammo:'9mm', dmg:18,rpm:420,auto:false,mag:15,spread:0.02, reload:1.6,range:90, zoom:1.1,pellets:1,recoil:0.03, hz:0.5,muz:0.66,pistol:true,rank:1,kind:'pistol'},
-  UMP45: {name:'UMP45', ammo:'9mm', dmg:22,rpm:660,auto:true, mag:25,spread:0.022,reload:2.2,range:140,zoom:1.5,pellets:1,recoil:0.017,hz:0.35,muz:0.52,rank:3,kind:'smg',dot:true},
+  // faster-firing than before and now carries a switchable 3x scope (altZoom, toggle with V) on
+  // top of its dot sight - lets it flex into mid-range fights instead of being purely CQB, at the
+  // cost of a bit more spread/recoil to control at that higher fire rate
+  UMP45: {name:'UMP45', ammo:'9mm', dmg:22,rpm:780,auto:true, mag:25,spread:0.026,reload:2.2,range:220,zoom:1.5,altZoom:3,pellets:1,recoil:0.02,hz:0.35,muz:0.52,rank:3,kind:'smg',dot:true},
   M416:  {name:'M416',  ammo:'5.56',dmg:29,rpm:700,auto:true, mag:30,spread:0.015,reload:2.1,range:320,zoom:1.5,pellets:1,recoil:0.022,hz:0.4,muz:0.84,rank:5,kind:'ar',dot:true},
   AKM:   {name:'AKM',   ammo:'7.62',dmg:34,rpm:600,auto:true, mag:30,spread:0.021,reload:2.4,range:300,zoom:1.5,pellets:1,recoil:0.034,hz:0.7,muz:0.88,rank:4,kind:'ar',dot:true},
   S686:  {name:'S686',  ammo:'12G', dmg:16,rpm:150,auto:false,mag:2, spread:0.075,reload:2.6,range:30, zoom:1.1,pellets:9,recoil:0.09, hz:0.5,muz:0.92,rank:3,kind:'shotgun'},
@@ -2065,6 +2068,14 @@ function finishHeal(a){
 // ---------- combat
 const _o=new V3(),_d=new V3(),_hp=new V3();
 function muzzleOf(a,out){
+  if(a.mg&&a.mg.gunMesh){
+    // the mounted gun's own barrel tip, read straight from its actual world transform - the
+    // generic formula below is built around the shooter's own pos/yaw, which for a mounted actor
+    // is the SEAT position behind the gun (see MG_SEAT_OFS), not the gun itself, so it was putting
+    // muzzle flashes/tracers a couple of units off from where the visible barrel actually is
+    a.mg.gunMesh.updateMatrixWorld(true);
+    return a.mg.gunMesh.localToWorld(out.set(0,1.15,1.32));
+  }
   const w=a.weapon(),L=(a.stance==='prone'?0.9:0.22)+(w?WEAPONS[w.key].muz:0.5);
   const fx=-Math.sin(a.yaw),fz=-Math.cos(a.yaw),cp=Math.cos(a.pitch),side=0.08+(a.lean||0)*0.35;
   out.set(a.pos.x+Math.cos(a.yaw)*side+fx*L*cp,a.pos.y+ST(a).muz+Math.sin(a.pitch)*L,a.pos.z-Math.sin(a.yaw)*side+fz*L*cp);
@@ -2080,7 +2091,10 @@ function tryFire(a,dir,origin){
   let spread=def.spread;
   const stF=a.stance==='prone'?0.55:a.stance==='crouch'?0.78:1;
   if(a.isPlayer){
-    spread*=G.aimScope?(def.scope?0.03:0.3):G.ads?(def.scope?0.3:0.45):1; spread*=(a.moveSpeed>1?1.5:1)*(a.onGround?1:2.4)*stF; spread+=a.bloom;
+    // a switched-on altZoom scope (UMP45's 3x) gets the same tight-aim payoff as a true fixed
+    // scope while it's actually active, not just the flat ADS bonus every weapon already gets
+    const effScope=def.scope||(def.altZoom&&a.scopeAlt);
+    spread*=G.aimScope?(effScope?0.03:0.3):G.ads?(effScope?0.3:0.45):1; spread*=(a.moveSpeed>1?1.5:1)*(a.onGround?1:2.4)*stF; spread+=a.bloom;
     a.bloom=Math.min(0.045,a.bloom+def.recoil*0.3);
   } else spread*=0.6*stF;
   const o=origin||muzzleOf(a,_o);
@@ -2228,6 +2242,14 @@ function dmRespawn(a){ dmPlaceAtSpawn(a); }
 // real aim-up/down, not just at extreme yaw. 2.0 keeps real clearance (~1-2 units) across the full
 // clamped yaw/pitch range below, verified by direct calculation, not just at dead-centre aim.
 const MG_SEAT_OFS=2.0;
+// the camera sat at roughly the SAME height as the gun body/barrel (eye height ~1.16 above the
+// mount vs. the gun's own 1.05-1.3), so looking straight down the mount's facing put the barrel
+// directly on the view axis, coaxial with it - at that point no amount of backward distance fixes
+// it, since something dead ahead on the camera's own axis stays dead-centre in frame no matter how
+// far back the camera sits. Raising the camera clear above the gun's own height (its tallest part,
+// the shield, tops out at 1.46 above the mount) puts it in a genuine over-the-top position instead,
+// looking down across the gun rather than straight through it.
+const MG_CAM_RISE=1.3;
 // how far the gun can swing each way (yaw) from the mount's own facing before it's clamped. Without
 // a limit, looking far enough around swings the barrel/receiver close enough to the fixed camera
 // spot behind it to fill the whole view - a real tripod gun has a limited traverse arc for exactly
@@ -2355,8 +2377,8 @@ function dmExplodeAt(p,doDamage){
   for(const a of actors){
     if(!a.alive) continue;
     const d=Math.hypot(a.pos.x-p.x,a.pos.z-p.z);
-    if(d>5) continue;
-    const dmg=Math.round(lerp(85,5,d/5));
+    if(d>8) continue;
+    const dmg=Math.round(lerp(110,20,d/8));
     damage(a,dmg,null,false,'공습');
   }
 }
@@ -2781,7 +2803,12 @@ function updatePlayer(dt){
       else if(!G.noLock&&!touchUIOn) requestLock();
     }
   }
-  if(pressed.has('KeyV'))G.fp=!G.fp;
+  // third person is no longer supported - V is now the switchable-scope toggle for weapons that
+  // carry one (UMP45's 3x on top of its dot sight)
+  if(pressed.has('KeyV')){
+    const w=p.weapon(),def=w?WEAPONS[w.key]:null;
+    if(def&&def.altZoom)p.scopeAlt=!p.scopeAlt;
+  }
   p.bloom=Math.max(0,p.bloom-dt*0.05);
   if(p.state==='plane'){ p.pos.copy(plane.pos); if(pressed.has('KeyF')) jumpOut(p); return; }
   // mounted hilltop MG (deathmatch only): F mounts the nearest free one, or dismounts if already on it
@@ -2828,7 +2855,7 @@ function updatePlayer(dt){
   // first person: holding also looks down the sights; third person: holding = over-the-shoulder aim
   G.aimScope=!boltLock&&(G.scopeToggle||(G.fp&&holdR));
   G.ads=!G.aimScope&&!boltLock&&holdR;
-  G.scoped=!!(G.aimScope&&def&&def.scope);
+  G.scoped=!!(G.aimScope&&def&&(def.scope||(def.altZoom&&p.scopeAlt)));
   // mounted MG: always tripod-stabilised aim, no optic overlay (it has none) regardless of mouse state
   if(p.mg){G.aimScope=false;G.scoped=false;G.ads=true;}
   const sprint=wantSprint&&!G.ads&&!G.aimScope&&p.healT<=0&&p.stance==='stand';
@@ -3297,6 +3324,17 @@ function actorTick(a,dt){
     u.gunHold.visible=false;setArm(u.armR,2.85,0.3,0.35);setArm(u.armL,2.85,-0.3,0.35);
     u.legs.forEach((l,i)=>{l.th.rotation.set(0.18+i*0.1,0,0);l.kn.rotation.set(-0.3-i*0.1,0,0);});u.head.rotation.x=0.1;return;
   }
+  if(a.mg){
+    // mounted: the character's own hand-held weapon model is hidden entirely - the single visible
+    // gun is the world-space tripod one (mountMG installs a virtual 'MG' slot, which otherwise
+    // rendered a second, separate held gun in the hands here, visible to anyone watching from the
+    // side even though the actual shots come from the tripod gun's own barrel)
+    u.gunHold.visible=false;
+    setArm(u.armR,0.25,0.55,0.6);setArm(u.armL,0.25,-0.55,0.6);
+    u.legs.forEach(l=>{l.th.rotation.set(-0.35,0,0);l.kn.rotation.set(-1.1,0,0);});
+    u.hips.position.y=0.62;u.head.rotation.x=0.1;
+    return;
+  }
   // stance blends (smoothed so crouch/prone transitions animate)
   a.ck=lerp(a.ck,a.stance==='crouch'?1:0,Math.min(1,dt*9));
   a.pk=lerp(a.pk,a.stance==='prone'?1:0,Math.min(1,dt*6));
@@ -3644,17 +3682,29 @@ function updateCamera(dt){
   if(p.state==='ground'&&p.alive){
     // prone: eye sits forward of the body centre
     const fo=prone?0.72:0;
-    _tgt.set(p.pos.x-Math.sin(yaw)*fo+_right.x*ln*0.4,p.pos.y+p.eyeH-0.05-Math.abs(ln)*0.06,p.pos.z-Math.cos(yaw)*fo+_right.z*ln*0.4);
+    // mounted MG: the gun body/barrel sit at roughly the same height as a normal (crouched) eye
+    // line, so looking straight down the mount's facing put them dead-centre on the camera's own
+    // view axis - no amount of backward distance clears something that's directly ahead on axis.
+    // Raising the eye clear above the gun's own height (tallest part, the shield, tops out 1.46
+    // above the mount) gives a real over-the-top view down across the gun instead of through it.
+    // This only raises the CAMERA target, not p.pos.y itself, so the seated body/model this player
+    // (or a bot) presents to other viewers stays put at the gun - it doesn't float.
+    const mgRise=p.mg?MG_CAM_RISE:0;
+    _tgt.set(p.pos.x-Math.sin(yaw)*fo+_right.x*ln*0.4,p.pos.y+p.eyeH-0.05-Math.abs(ln)*0.06+mgRise,p.pos.z-Math.cos(yaw)*fo+_right.z*ln*0.4);
     clampEye(p,_tgt);
     dist=G.ads?1.2:prone?2.3:2.7;sh=(G.ads?0.42:0.55)+ln*0.25;
   }
   const w=p.weapon();
+  // some weapons (UMP45) carry a second, switchable scope (altZoom, toggled with V) on top of
+  // their default dot sight - effective zoom picks whichever one is currently active
+  const wdef=w?WEAPONS[w.key]:null;
+  const wz=wdef?((wdef.altZoom&&p.scopeAlt)?wdef.altZoom:wdef.zoom):1;
   if(G.scoped){
-    camera.position.copy(_tgt);camera.position.y+=0.05;fov=72/WEAPONS[w.key].zoom;camNear=true;
+    camera.position.copy(_tgt);camera.position.y+=0.05;fov=72/wz;camNear=true;
   } else if((G.fp||G.aimScope)&&p.alive&&p.state==='ground'){
     camera.position.set(_tgt.x-Math.sin(yaw)*0.12,_tgt.y+0.05-(p.vault?0.4:0),_tgt.z-Math.cos(yaw)*0.12);
     clampEye(p,camera.position);
-    fov=G.aimScope&&w?72/WEAPONS[w.key].zoom:G.ads&&w?72/1.2:78;camNear=true;
+    fov=G.aimScope&&w?72/wz:G.ads&&w?72/1.2:78;camNear=true;
   } else {
     if(G.ads&&w)fov=72/1.25;
     _des.copy(_tgt).addScaledVector(_dir,-dist).addScaledVector(_right,sh);_des.y+=up;

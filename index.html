@@ -1548,9 +1548,15 @@ const WEAPONS={
   // faster-firing than before and now carries a switchable 3x scope (altZoom, toggle with V) on
   // top of its dot sight - lets it flex into mid-range fights instead of being purely CQB, at the
   // cost of a bit more spread/recoil to control at that higher fire rate
-  UMP45: {name:'UMP45', ammo:'9mm', dmg:22,rpm:780,auto:true, mag:25,spread:0.026,reload:2.2,range:220,zoom:1.5,altZoom:3,pellets:1,recoil:0.02,hz:0.35,muz:0.52,rank:3,kind:'smg',dot:true},
-  M416:  {name:'M416',  ammo:'5.56',dmg:29,rpm:700,auto:true, mag:30,spread:0.015,reload:2.1,range:320,zoom:1.5,pellets:1,recoil:0.022,hz:0.4,muz:0.84,rank:5,kind:'ar',dot:true},
-  AKM:   {name:'AKM',   ammo:'7.62',dmg:34,rpm:600,auto:true, mag:30,spread:0.021,reload:2.4,range:300,zoom:1.5,pellets:1,recoil:0.034,hz:0.7,muz:0.88,rank:4,kind:'ar',dot:true},
+  // every full-auto weapon's base dot sight is true 1x (no magnification) now, like a real red dot -
+  // only their switchable altZoom (UMP45) or dedicated scoped weapons (Kar98k/MK14, untouched) ever
+  // actually magnify
+  UMP45: {name:'UMP45', ammo:'9mm', dmg:22,rpm:780,auto:true, mag:25,spread:0.026,reload:2.2,range:220,zoom:1,altZoom:3,pellets:1,recoil:0.02,hz:0.35,muz:0.52,rank:3,kind:'smg',dot:true},
+  // tactical/attachment-friendly AR: switchable (V) into a 4x + 3-round-burst "designated marksman"
+  // mode on top of its normal full-auto dot-sight setup - AKM stays the straightforward high-damage
+  // pick, M416 flexes into a longer-range role instead of picking up a whole separate weapon for it
+  M416:  {name:'M416',  ammo:'5.56',dmg:29,rpm:700,auto:true, mag:30,spread:0.015,reload:2.1,range:320,zoom:1,altZoom:4,burstAlt:true,pellets:1,recoil:0.022,hz:0.4,muz:0.84,rank:5,kind:'ar',dot:true},
+  AKM:   {name:'AKM',   ammo:'7.62',dmg:34,rpm:600,auto:true, mag:30,spread:0.021,reload:2.4,range:300,zoom:1,pellets:1,recoil:0.034,hz:0.7,muz:0.88,rank:4,kind:'ar',dot:true},
   S686:  {name:'S686',  ammo:'12G', dmg:16,rpm:150,auto:false,mag:2, spread:0.075,reload:2.6,range:30, zoom:1.1,pellets:9,recoil:0.09, hz:0.5,muz:0.92,rank:3,kind:'shotgun'},
   Kar98k:{name:'Kar98k',ammo:'7.62',dmg:85,rpm:42, auto:false,mag:5, spread:0.035,reload:3.2,range:600,zoom:6,  pellets:1,recoil:0.11, hz:0.3,muz:1.08,rank:5,kind:'sniper',scope:true,bolt:true},
   // DMR: semi-auto, faster follow-up shots than a bolt gun but less alpha damage than Kar98k -
@@ -1558,8 +1564,10 @@ const WEAPONS={
   MK14:  {name:'MK14',  ammo:'7.62',dmg:48,rpm:280,auto:false,mag:16,spread:0.024,reload:2.8,range:450,zoom:4,  pellets:1,recoil:0.055,hz:0.4,muz:0.98,rank:5,kind:'dmr',scope:true},
   // mounted hilltop MG (deathmatch only, see DM_MGS/mountMG): never lootable, always installed into
   // whichever slot the player was holding while they mount it. Tight spread even from the hip since
-  // it's tripod-stabilised, and default-aimed (mountMG forces G.ads) on top of that.
-  MG:    {name:'저지기관총',ammo:'MG',dmg:38,rpm:650,auto:true,mag:50,spread:0.017,reload:4.5,range:500,zoom:1,pellets:1,recoil:0.02,hz:0.3,muz:1.05,rank:5,kind:'mg',mounted:true},
+  // it's tripod-stabilised, and default-aimed (mountMG forces G.ads) on top of that; holding right-
+  // click on top of that engages aimScope for an actual zoomed-in view of the aim point (no scope
+  // overlay - it has no scope:true - just the FOV zoom, same mechanism as every other weapon's ADS).
+  MG:    {name:'저지기관총',ammo:'MG',dmg:38,rpm:650,auto:true,mag:50,spread:0.017,reload:4.5,range:500,zoom:2.5,pellets:1,recoil:0.02,hz:0.3,muz:1.05,rank:5,kind:'mg',mounted:true},
 };
 const WEIGHTS=[['UMP45',20],['M416',17],['AKM',19],['S686',15],['P92',15],['Kar98k',24]];
 const AMMO_COL={'9mm':0xe8c35a,'5.56':0x7fc65a,'7.62':0xe0873a,'12G':0xcc4b45,'MG':0x9aa0a6};
@@ -1570,7 +1578,10 @@ function gunModel(key,scopeOn){
   const g=new THREE.Group(),K=0x23272b,Mt=0x3b4147,W=0x7b4b2a;
   const add=(...ms)=>ms.forEach(m=>g.add(m));
   switch(key){
-    case'M416':add(P(gB(.06,.085,.4),Mt,0,0,-.08),P(gB(.066,.07,.24),K,0,-.005,-.38),P(gC(.013,.22),K,0,.005,-.6),P(gB(.04,.15,.075),K,0,-.11,-.14,.18),P(gB(.036,.1,.045),K,0,-.09,.06,-.35),P(gB(.05,.085,.24),K,0,-.01,.24));break;
+    case'M416':add(P(gB(.06,.085,.4),Mt,0,0,-.08),P(gB(.066,.07,.24),K,0,-.005,-.38),P(gC(.013,.22),K,0,.005,-.6),P(gB(.04,.15,.075),K,0,-.11,-.14,.18),P(gB(.036,.1,.045),K,0,-.09,.06,-.35),P(gB(.05,.085,.24),K,0,-.01,.24),
+      // vertical foregrip + a short top rail section - always on, part of the base "tactical" look
+      // rather than something that only appears with the switchable scope
+      P(gB(.026,.095,.026),K,0,-.135,-.24,0.12),P(gB(.012,.014,.22),Mt,0,.05,-.4));break;
     case'AKM':add(P(gB(.06,.09,.42),Mt,0,0,-.06),P(gB(.064,.075,.22),W,0,-.01,-.38),P(gC(.014,.3),K,0,.01,-.62),P(gB(.04,.17,.08),K,0,-.12,-.14,.38),P(gB(.036,.1,.045),K,0,-.09,.07,-.35),P(gB(.05,.09,.26),W,0,-.03,.26,.12));break;
     case'UMP45':add(P(gB(.07,.1,.38),K,0,0,-.08),P(gC(.017,.14),K,0,.01,-.33),P(gB(.042,.16,.06),K,0,-.12,-.13),P(gB(.036,.1,.045),K,0,-.09,.06,-.35),P(gB(.02,.06,.24),K,0,0,.2));break;
     case'S686':add(P(gC(.018,.62),Mt,.019,.01,-.49),P(gC(.018,.62),Mt,-.019,.01,-.49),P(gB(.07,.08,.18),Mt,0,0,-.08),P(gB(.06,.05,.3),W,0,-.035,-.35),P(gB(.055,.1,.32),W,0,-.04,.2,.1));break;
@@ -1594,6 +1605,16 @@ function gunModel(key,scopeOn){
       P(gC(.021,.16),Lg,0,.1,-.09),                  // main tube, gC's own axis already runs fwd/back
       P(geo('scLensF',()=>new THREE.CylinderGeometry(.017,.017,.006,14)),glass,0,.1,-.17,1.5708),
       P(geo('scLensB',()=>new THREE.CylinderGeometry(.017,.017,.006,14)),glass,0,.1,-.01,1.5708));
+  } else if(key==='M416'&&scopeOn){
+    // bigger than UMP's reflex tube, with a pair of adjustment turrets on top - reads as a proper
+    // designated-marksman scope rather than a reflex sight, matching the 4x/burst "DM mode" swap
+    const Lg=0x1a1c1e,glass=new THREE.MeshBasicMaterial({color:0x5b8fb0});
+    add(P(gB(.032,.022,.08),K,0,.06,-.24),
+      P(gC(.014,.06),K,0,.085,-.24,1.5708),
+      P(gC(.026,.24),Lg,0,.11,-.24),
+      P(geo('scLensF2',()=>new THREE.CylinderGeometry(.021,.021,.007,14)),glass,0,.11,-.35,1.5708),
+      P(geo('scLensB2',()=>new THREE.CylinderGeometry(.021,.021,.007,14)),glass,0,.11,-.13,1.5708),
+      P(gC(.011,.03),K,.03,.14,-.29,1.5708),P(gC(.011,.03),K,0,.16,-.24));
   } else if(WEAPONS[key].dot){ // 1.5x red-dot sight: rail mount + hood
     add(P(gB(.03,.02,.07),K,0,.055,-.09),P(geo('rdHood',()=>{const q=new THREE.CylinderGeometry(.024,.024,.06,14,1,true);q.rotateX(Math.PI/2);return q;}),K,0,.088,-.09));
   }
@@ -2271,16 +2292,18 @@ function dmPlaceAtSpawn(a){
   if(!a.isPlayer&&a.brain){a.brain.target=null;a.brain.path=[];a.brain.mode='none';}
 }
 function dmRespawn(a){ dmPlaceAtSpawn(a); }
-// Camera geometry for the mounted MG: a fixed point behind (MG_SEAT_OFS) and above (MG_CAM_RISE)
-// the pivot, so nothing dead ahead on the view axis (the coaxial-with-the-barrel problem the
-// straight-behind version had) and nothing swept in by pitch (the gun's elevated mass - shield/
-// body/pivot sit 1.05-1.3 above the pivot - swings a wide arc toward a fixed camera as it tilts).
-// Toned down from an earlier pass that technically cleared every case but sat so high and far back
-// it lost any feeling of actually being seated at the gun; these numbers were re-verified by hand
-// across the full clamped yaw+pitch range (worst case ~1.1-1.6 units clearance for every gun part,
-// not just neutral aim) rather than just made smaller and hoped for the best.
-const MG_SEAT_OFS=1.5;
-const MG_CAM_RISE=0.5;
+// Camera geometry for the mounted MG: a fixed point in the GUN's OWN local space (behind it by
+// MG_SEAT_OFS, above it by MG_CAM_RISE), read off the gun's actual world transform every frame
+// (see the p.mg block below) - not a point fixed in world space. A world-fixed camera kept its
+// clearance from the gun only at the pitch it was tuned for; pitching down to actually look at
+// what's below the roof (the whole point of a defensive MG position) swung the gun right back
+// toward it, same problem as the original coaxial-with-the-barrel bug in a different form. Riding
+// along with the gun in its own local frame means whatever clearance holds at one pitch holds at
+// every pitch, by construction - verified against every gun part's fixed local position (nearest
+// approach ~0.9 units, to the gun body's edge).
+const MG_SEAT_OFS=1.35;
+const MG_CAM_RISE=1.05;
+const _mgCamP=new V3();
 // how far the gun can swing each way (yaw) from the mount's own facing before it's clamped. Without
 // a limit, looking far enough around swings the barrel/receiver close enough to the fixed camera
 // spot behind it to fill the whole view - a real tripod gun has a limited traverse arc for exactly
@@ -2312,11 +2335,16 @@ function mountMG(p,mg){
   p.slots[p.cur]={key:'MG',mag:mg.mag===undefined?WEAPONS.MG.mag:mg.mag};
   p.ammo.MG=Infinity;
   // the tripod/seat (mg.mesh) never moves - only the gun itself (mg.gunMesh) tracks the gunner's
-  // look direction - so the seat position always uses the mount's own fixed yaw, never the live
-  // p.yaw. That also keeps the camera anchored at a stable point behind the gun instead of orbiting
-  // through its own geometry as the gun swings to follow the player's aim.
-  p.pos.set(mg.x+Math.sin(mg.yaw)*MG_SEAT_OFS,mg.y,mg.z+Math.cos(mg.yaw)*MG_SEAT_OFS); p.yaw=mg.yaw; p.pitch=0; p.stance='crouch'; p.vy=0; p.onGround=true; p.reloadT=0;
-  if(mg.gunMesh) mg.gunMesh.rotation.set(0,0,0);
+  // look direction. The camera rides along with the gun (see MG_SEAT_OFS/MG_CAM_RISE above), read
+  // straight off its world transform, so it starts at the same neutral-pose position it'll return
+  // to on dismount below.
+  p.yaw=mg.yaw; p.pitch=0; p.stance='crouch'; p.vy=0; p.onGround=true; p.reloadT=0;
+  if(mg.gunMesh){
+    mg.gunMesh.rotation.set(0,0,0);
+    mg.gunMesh.updateMatrixWorld(true);
+    mg.gunMesh.localToWorld(_mgCamP.set(0,MG_CAM_RISE,-MG_SEAT_OFS));
+    p.pos.copy(_mgCamP);
+  }
 }
 function dismountMG(p){
   const mg=p.mg; if(!mg) return;
@@ -2898,8 +2926,12 @@ function updatePlayer(dt){
   G.aimScope=!boltLock&&(G.scopeToggle||(G.fp&&holdR));
   G.ads=!G.aimScope&&!boltLock&&holdR;
   G.scoped=!!(G.aimScope&&def&&(def.scope||(def.altZoom&&p.scopeAlt)));
-  // mounted MG: always tripod-stabilised aim, no optic overlay (it has none) regardless of mouse state
-  if(p.mg){G.aimScope=false;G.scoped=false;G.ads=true;}
+  // mounted MG: always at least tripod-stabilised aim (G.ads) regardless of mouse state, same as
+  // before - but right-click can now ALSO engage aimScope on top of that, zooming the view in on
+  // the aim point (MG.zoom), same generic mechanism every other weapon's ADS-hold already uses.
+  // G.scoped stays false naturally (MG has neither .scope nor .altZoom) - no full scope overlay,
+  // just the FOV zoom, which is what "확대" without a dedicated optic actually looks like.
+  if(p.mg){G.scoped=false;G.ads=true;}
   const sprint=wantSprint&&!G.ads&&!G.aimScope&&p.healT<=0&&p.stance==='stand';
   let sp=sprint?6.3:G.ads||G.aimScope?2.6:4.4;
   if(p.stance==='crouch')sp=G.ads||G.aimScope?1.7:2.7;
@@ -2923,15 +2955,24 @@ function updatePlayer(dt){
     if(!standUp&&pressed.has('Space')&&p.onGround&&!p.inWater&&!p.mg&&!tryVault(p)){p.vy=7.4;p.onGround=false;}
     if(!p.vault) moveActor(p,mx*sp,mz*sp,dt);
   }
-  // tripod-mounted: no walking away from it, pinned every frame. The tripod/seat itself never
-  // moves, so the pin point always uses the mount's own fixed yaw (mg.yaw), not the live p.yaw - the
-  // camera then sits at a stable point behind the seat instead of orbiting around with the gun.
-  // Only the gun (mg.gunMesh) turns to track where the player's actually looking.
+  // tripod-mounted: no walking away from it, pinned every frame. The camera used to sit at a
+  // world-fixed point behind the mount's own facing (mg.yaw), which kept it clear of the gun at
+  // neutral aim but not once the gun pitched - clearance changed with pitch since the camera didn't
+  // move with it. Now the seat rides along with the gun instead: a fixed point in the GUN's own
+  // local space (behind and just above its cluster of parts), read straight off its actual world
+  // transform every frame - so whatever clearance holds at one pitch holds at every pitch, and
+  // aiming down at the basin below (the whole point of a defensive MG position) isn't blocked by a
+  // fixed fired-in-place camera angle.
   if(p.mg){
     p.yaw=p.mg.yaw+clamp(angDiff(p.mg.yaw,p.yaw),-MG_TRAVERSE,MG_TRAVERSE);
     p.pitch=clamp(p.pitch,-MG_PITCH_LIMIT,MG_PITCH_LIMIT);
-    p.pos.x=p.mg.x+Math.sin(p.mg.yaw)*MG_SEAT_OFS;p.pos.y=p.mg.y;p.pos.z=p.mg.z+Math.cos(p.mg.yaw)*MG_SEAT_OFS;p.vy=0;p.onGround=true;
-    if(p.mg.gunMesh){p.mg.gunMesh.rotation.y=p.yaw-p.mg.yaw;p.mg.gunMesh.rotation.x=-p.pitch;}
+    if(p.mg.gunMesh){
+      p.mg.gunMesh.rotation.y=p.yaw-p.mg.yaw;p.mg.gunMesh.rotation.x=-p.pitch;
+      p.mg.gunMesh.updateMatrixWorld(true);
+      p.mg.gunMesh.localToWorld(_mgCamP.set(0,MG_CAM_RISE,-MG_SEAT_OFS));
+      p.pos.copy(_mgCamP);
+    }
+    p.vy=0;p.onGround=true;
   }
   if(!p.mg){
     if(pressed.has('Digit1'))switchTo(p,0);
@@ -2946,9 +2987,15 @@ function updatePlayer(dt){
   if(G.nearSel>=G.nearItems.length)G.nearSel=0;
   G.nearLoot=G.nearItems[G.nearSel]||null;
   if(G.nearLoot&&pressed.has('KeyF')&&!G.invOpen){localPickup(G.nearLoot);G.nearSel=0;}
-  if(mouse.left&&def&&!G.invOpen&&(def.auto||mouse.clicked)){
+  // burst mode (M416's altZoom toggle): one trigger pull queues a fixed 3-round burst that keeps
+  // firing on its own (each shot still gated by the normal fireCd/rpm) even if the mouse is
+  // released partway through, the way a real burst trigger group works - not "auto, but interrupted
+  // after 3 shots if you're still holding", which is what reusing the auto path here would give
+  const burstMode=!!(def&&def.burstAlt&&p.scopeAlt);
+  if(burstMode&&mouse.clicked)p.burstLeft=3;
+  if(!G.invOpen&&def&&(burstMode?p.burstLeft>0:mouse.left&&(def.auto||mouse.clicked))){
     const dir=playerAimDir(); const origin=G.scoped||G.fp||G.aimScope?camera.position.clone():muzzleOf(p,new V3());
-    tryFire(p,dir,origin);
+    if(tryFire(p,dir,origin)&&burstMode)p.burstLeft--;
   }
   mouse.clicked=false;
 }
@@ -3275,11 +3322,18 @@ function updateBot(b,dt){
   if(b.inWater)speed*=0.5;
   moveActor(b,mx*speed,mz*speed,dt);
   if(b.mg){
-    // tripod/seat stay fixed (mg.yaw, not live b.yaw); only the gun (mg.gunMesh) tracks the bot's aim
+    // tripod/seat stay fixed (mg.yaw, not live b.yaw); only the gun (mg.gunMesh) tracks the bot's
+    // aim. Position rides along with the gun in its own local space, same as the player (see
+    // MG_SEAT_OFS/MG_CAM_RISE) - keeps a consistent relative pose for anyone watching this bot too.
     b.yaw=b.mg.yaw+clamp(angDiff(b.mg.yaw,b.yaw),-MG_TRAVERSE,MG_TRAVERSE);
     b.pitch=clamp(b.pitch,-MG_PITCH_LIMIT,MG_PITCH_LIMIT);
-    b.pos.x=b.mg.x+Math.sin(b.mg.yaw)*MG_SEAT_OFS;b.pos.y=b.mg.y;b.pos.z=b.mg.z+Math.cos(b.mg.yaw)*MG_SEAT_OFS;b.vy=0;b.onGround=true;
-    if(b.mg.gunMesh){b.mg.gunMesh.rotation.y=b.yaw-b.mg.yaw;b.mg.gunMesh.rotation.x=-b.pitch;}
+    if(b.mg.gunMesh){
+      b.mg.gunMesh.rotation.y=b.yaw-b.mg.yaw;b.mg.gunMesh.rotation.x=-b.pitch;
+      b.mg.gunMesh.updateMatrixWorld(true);
+      b.mg.gunMesh.localToWorld(_mgCamP.set(0,MG_CAM_RISE,-MG_SEAT_OFS));
+      b.pos.copy(_mgCamP);
+    }
+    b.vy=0;b.onGround=true;
   }
   // stuck/anti-jam recovery now also runs while fighting (not just while following a path) - a bot
   // that chases a target it can see through a window straight through a doorway and then jams up
@@ -3568,9 +3622,10 @@ function updateHUD(dt){
   hud.scope.classList.toggle('ump3x',G.scoped&&!!w&&w.key==='UMP45');
   // sights (iron sights on the held view-model) normally stand in for the crosshair while aiming -
   // but mounted, the view-model is hidden entirely (the world-space tripod gun is the only visible
-  // gun) so there was nothing at all showing the mount's actual aim point. The crosshair covers for
-  // it while mounted instead of being suppressed like it is for every other weapon's ADS.
-  const sights=G.aimScope||(G.fp&&G.ads&&!p.mg);
+  // gun) so there was nothing at all showing the mount's actual aim point, not even while right-
+  // click zooms the view in further (MG has no optic to show instead). The crosshair stays up the
+  // whole time it's mounted rather than being suppressed like every other weapon's ADS/aimScope.
+  const sights=!p.mg&&(G.aimScope||(G.fp&&G.ads));
   hud.cross.style.display=G.scoped||sights||p.state!=='ground'||!p.alive?'none':'block';
   $('rdot').hidden=true;
   if(w){
@@ -3730,15 +3785,11 @@ function updateCamera(dt){
   if(p.state==='ground'&&p.alive){
     // prone: eye sits forward of the body centre
     const fo=prone?0.72:0;
-    // mounted MG: the gun body/barrel sit at roughly the same height as a normal (crouched) eye
-    // line, so looking straight down the mount's facing put them dead-centre on the camera's own
-    // view axis - no amount of backward distance clears something that's directly ahead on axis.
-    // Raising the eye clear above the gun's own height (tallest part, the shield, tops out 1.46
-    // above the mount) gives a real over-the-top view down across the gun instead of through it.
-    // This only raises the CAMERA target, not p.pos.y itself, so the seated body/model this player
-    // (or a bot) presents to other viewers stays put at the gun - it doesn't float.
-    const mgRise=p.mg?MG_CAM_RISE:0;
-    _tgt.set(p.pos.x-Math.sin(yaw)*fo+_right.x*ln*0.4,p.pos.y+p.eyeH-0.05-Math.abs(ln)*0.06+mgRise,p.pos.z-Math.cos(yaw)*fo+_right.z*ln*0.4);
+    // mounted MG: p.pos IS already the intended eye point (it rides along with the gun in its own
+    // local space, see MG_SEAT_OFS/MG_CAM_RISE and the p.mg block in updatePlayer) - unlike the
+    // normal standing/crouching case, no separate eyeH lift on top of a body-centre position needed.
+    if(p.mg){_tgt.copy(p.pos);}
+    else _tgt.set(p.pos.x-Math.sin(yaw)*fo+_right.x*ln*0.4,p.pos.y+p.eyeH-0.05-Math.abs(ln)*0.06,p.pos.z-Math.cos(yaw)*fo+_right.z*ln*0.4);
     clampEye(p,_tgt);
     dist=G.ads?1.2:prone?2.3:2.7;sh=(G.ads?0.42:0.55)+ln*0.25;
   }

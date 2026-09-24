@@ -549,13 +549,17 @@ function P(g,c,x,y,z,rx){const m=M(g,c,x,y,z);if(rx)m.rotation.x=rx;return m;}
 // 5:3 rectangle, long axis along X - each team spawns from a bunker on a short (Z) edge and fights
 // down the long lane. Much smaller than the old 420x420 square so AR/DMR fights actually happen
 // instead of everyone wandering for a minute before finding anyone.
-// DM_HALF_X hugs the true outermost structure on the X (left-right) axis exactly: the tall boundary
-// wall built right behind each team's MG bunker (see buildDeathmatchMap) sits at
-// BASE_DX(48) + bunker half-width(6) + stair gap(0.55) + stair run(13*0.3=3.9) + 0.8 + wall
-// thickness(2.5) = 61.75 from centre - no leftover hillside past it any more. DM_HALF_Z is pulled in
-// to match too, just past the outermost Z-direction cover (the two centreline HESCO segments
-// reaching to +-40 - see buildDeathmatchMap), rather than the old arbitrary 48.
-const DM_OX=6000,DM_OZ=0,DM_HALF_X=61.75,DM_HALF_Z=42,DM_GROUND=0;
+// DM_HALF_X sits just past the true outermost structure on the X (left-right) axis: each team's
+// exterior MG staircase (see buildDeathmatchMap) ends at BASE_DX(48) + bunker half-width(6) + stair
+// gap(0.55) + stair run(13*0.3=3.9) = 58.45 from centre, plus a small ~1.5 stand-behind buffer = 60.
+// There's no separate boundary wall past that any more - the mountain ring itself (see MTN_GAP in
+// buildDeathmatchMap) now starts right where this buffer ends and is what actually stops a player,
+// instead of a distant ring backed up by a lone wall segment just behind the bunkers. DM_HALF_Z is
+// similarly just past the outermost Z-direction cover (the two centreline HESCO segments reaching to
+// +-40 - see buildDeathmatchMap). The player-position clamp in resolve() uses these two values with
+// NO extra margin - it's a backstop for whatever the mountain ring's own collision doesn't catch
+// first, not license to stand any further out than this.
+const DM_OX=6000,DM_OZ=0,DM_HALF_X=60,DM_HALF_Z=42,DM_GROUND=0;
 function inDM(x,z){return Math.abs(x-DM_OX)<DM_HALF_X&&Math.abs(z-DM_OZ)<DM_HALF_Z;}
 // elevation profile along the long axis: a flat basin down the middle (original size, with its own
 // buildings/sandbags) and each village sitting up on a flat plateau - height only depends on
@@ -1174,7 +1178,10 @@ function container(cx,cz,rot,base){
   const w=2.44,h=2.6,l=6.1,c=CONTAINER_COLS[Math.floor(srand()*CONTAINER_COLS.length)];
   const e=emitter(cx,cz,rot);
   e.box(-l/2,base,-w/2,l/2,base+h,w/2,c);
-  e.box(-l/2-0.05,base+h-0.14,-w/2-0.05,l/2+0.05,base+h,w/2+0.05,0x30322c,{collide:false});
+  // roof-cap detail: its top used to sit at exactly base+h, the same height as the container body's
+  // own top face right below it - two coplanar surfaces z-fighting into a flickery overlapping look.
+  // Nudged 0.02 above the body's top so the cap is unambiguously the topmost surface.
+  e.box(-l/2-0.05,base+h-0.14,-w/2-0.05,l/2+0.05,base+h+0.02,w/2+0.05,0x30322c,{collide:false});
   const dw=rot%2?w:l,dl=rot%2?l:w;
   DM_PROPS.push({x0:cx-dl/2,x1:cx+dl/2,z0:cz-dw/2,z1:cz+dw/2,type:'container'});
 }
@@ -1252,14 +1259,17 @@ function buildDeathmatchMap(){
   // mountain-ring sizing, computed up front so the ground plane and the peaks themselves can never
   // drift out of sync again: a peak's own base can be up to MTN_BASE_MAX wide/deep and its centre is
   // jittered up to MTN_JITTER_MAX off the ring line, so its inner (arena-facing) edge can come as
-  // close as (ring radius - jitter - base). Lx/Lz are pushed out far enough that even that worst
-  // case never crosses DM_HALF_X/DM_HALF_Z - previously the ring sat only 16 units out with bases up
-  // to 32 wide and +-5 jitter, so a peak could randomly intrude up to ~21 units INSIDE the supposedly
-  // open play area (this is exactly what boxed in the hilltop MG on one seed's roll). The ground
-  // plane is sized to fully cover the ring's worst-case outer edge too, so the mountains never float
-  // over an untextured void.
-  const MTN_BASE_MAX=24,MTN_JITTER_MAX=4,MTN_MARGIN=3;
-  const Lx=DM_HALF_X+MTN_BASE_MAX+MTN_JITTER_MAX+MTN_MARGIN,Lz=DM_HALF_Z+MTN_BASE_MAX+MTN_JITTER_MAX+MTN_MARGIN;
+  // close as (ring radius - jitter - base). The ring now hugs DM_HALF_X/DM_HALF_Z tightly (a couple
+  // of units of guaranteed clearance, MTN_GAP, instead of the ~30 it used to sit back by) so the
+  // mountains themselves are what a player actually collides with almost everywhere along the
+  // boundary, not a distant backdrop with the real stopping power left to the position clamp in
+  // resolve() - that clamp is now just a same-value backstop (see DM_HALF_X/DM_HALF_Z there) for the
+  // rare frame that outruns collision, not the primary mechanism. This also replaces the separate
+  // grey wall that used to seal off the ground behind each MG bunker - the tightened LEFT/RIGHT ring
+  // (the same peaks placed along x=+-Lx) already reaches in that far now, so a dedicated wall there
+  // was just a second, weaker copy of what the ring should have been doing everywhere all along.
+  const MTN_BASE_MAX=18,MTN_JITTER_MAX=2,MTN_GAP=3;
+  const Lx=DM_HALF_X+MTN_BASE_MAX+MTN_GAP,Lz=DM_HALF_Z+MTN_BASE_MAX+MTN_GAP;
   const MTN_OUTER=Lx+MTN_BASE_MAX+MTN_JITTER_MAX;
 
   // dirt ground, following the basin/plateau/hill profile - a basin down the middle, each village
@@ -1292,7 +1302,10 @@ function buildDeathmatchMap(){
     const cols=[0x6f6a5c,0x625d50,0x79725f,0x716b5c];
     const peak=(nx,nz)=>{
       const gy=dmGroundY(nx);
-      const baseW=sr(MTN_BASE_MAX*0.83,MTN_BASE_MAX),baseD=sr(MTN_BASE_MAX*0.83,MTN_BASE_MAX),h1=sr(70,120),h2=h1+sr(30,70);
+      // shorter than the old distant-backdrop version (70-120) now that the ring sits right at the
+      // play area's edge instead of far behind it - still comfortably taller than the MG bunker roof
+      // (~5 units) so it blocks sightlines out, just not absurdly oversized up close
+      const baseW=sr(MTN_BASE_MAX*0.83,MTN_BASE_MAX),baseD=sr(MTN_BASE_MAX*0.83,MTN_BASE_MAX),h1=sr(45,75),h2=h1+sr(25,45);
       const c1=cols[Math.floor(srand()*cols.length)],c2=cols[Math.floor(srand()*cols.length)];
       addBox(nx-baseW,gy-6,nz-baseD,nx+baseW,gy+h1,nz+baseD,c1);
       const capW=baseW*sr(0.45,0.65),capD=baseD*sr(0.45,0.65),cjx=sr(-6,6),cjz=sr(-6,6);
@@ -1440,12 +1453,11 @@ function buildDeathmatchMap(){
       const topY=y1-(i-1)*stepRise;
       addBox(Math.min(sa,sb),y0,sz0,Math.max(sa,sb),topY,sz1,0x76797a);
     }
-    // seal the back off properly instead of a token barrier standing alone in open ground - a tall,
-    // wide rock-coloured wall (matching the boundary mountains' own palette, not a tan HESCO patch)
-    // sits right past the foot of the stairs, taller than the roof itself so it blocks sightlines
-    // from up there too, not just movement at ground level
-    const wallX=side<0?anchor-stepN*stepRun-0.8:anchor+stepN*stepRun+0.8;
-    addBox(side<0?wallX-2.5:wallX,y0,tz-11,side<0?wallX:wallX+2.5,y0+15,tz+11,0x6f6a5c);
+    // the back used to get sealed off with a standalone grey wall right past the foot of the stairs;
+    // that's gone now - the boundary mountain ring (see MTN_GAP in the ring-sizing block above) has
+    // been pulled in tight enough that it picks up that job itself, a couple of units past DM_HALF_X,
+    // so the terrain right behind every bunker actually matches the boundary everywhere else instead
+    // of reading as a separate, flatter, greyer patch.
     // gun sits near the roof's front (basin-facing) edge rather than centred - dead centre left it
     // shielded by the bunker's own bulk on shots from below/ahead, so bots down in the basin
     // essentially never had a sightline back up at it even while it was actively firing on them
@@ -1982,15 +1994,16 @@ let AC=null,noiseBuf=null,planeHum=null,master=null,reverb=null;
 // concurrent-voice budget: a crowded fight (8v8 deathmatch, everyone in earshot of everyone else)
 // can trigger dozens of shotSound() calls within the same ~100ms window, each spawning several
 // WebAudio nodes; past a certain node count the audio thread falls behind and glitches, which reads
-// as sound randomly cutting in and out rather than a clean drop. Capping how many *remote* gunshots
-// can be synthesizing at once keeps playback smooth - the player's own shot always plays regardless.
-// Raised from the original 30 (tuned for BR, where a crowd this size almost never clusters within
-// earshot) plus a close-range exemption: a shot within 25m of the player never gets dropped for
-// budget, even if the cap is already full - it's the background/distant chatter that gets thinned
-// out, not the fight actually happening around you, which is exactly the "sound just disappears
-// mid-firefight" complaint a flat cap produces once DM's tighter, denser 8v8 arena is the normal case.
-let voiceBudget=0;const VOICE_MAX=56;
-function allowVoice(d){ if(d<25) return true; if(voiceBudget>=VOICE_MAX) return false; voiceBudget++; setTimeout(()=>voiceBudget=Math.max(0,voiceBudget-1),120); return true; }
+// as sound randomly cutting in and out (or, once the graph falls far enough behind, out entirely for
+// the rest of the match). Two separate pools instead of one flat cap: nearby gunfire (within 25m,
+// where it actually matters) gets its own generous-but-still-bounded budget so it's never the first
+// thing silenced, while everything past that draws from a smaller pool for background chatter. Both
+// on top of shotSound() itself now using far fewer nodes per remote shot than it used to.
+let voiceBudget=0,nearBudget=0;const VOICE_MAX=40,NEAR_MAX=48;
+function allowVoice(d){
+  if(d<25){ if(nearBudget>=NEAR_MAX) return false; nearBudget++; setTimeout(()=>nearBudget=Math.max(0,nearBudget-1),100); return true; }
+  if(voiceBudget>=VOICE_MAX) return false; voiceBudget++; setTimeout(()=>voiceBudget=Math.max(0,voiceBudget-1),120); return true;
+}
 function initAudio(){
   if(AC) return;
   try{AC=new (window.AudioContext||window.webkitAudioContext)();}catch(e){return;}
@@ -2044,18 +2057,31 @@ const GUNSND={
 function shotSound(pos,key,own){
   if(!AC||!player) return;
   const P=GUNSND[key],d=own?0:pos.distanceTo(player.pos); if(d>300) return;   // far-off gunfire isn't worth synthesizing - it was audible across nearly the whole island and piled up nodes fast
-  if(!own&&!allowVoice()) return;   // over budget: drop this remote shot rather than let every shot glitch
+  if(!own&&!allowVoice(d)) return;   // over budget: drop this remote shot rather than let every shot glitch
   const near=clamp(1-d/180,0,1),vol=P.vol*(own?1:1/(1+d*0.018));
   const bus=spatial(own?null:pos,(0.2+0.6*(1-near))*P.tail);
   const t=AC.currentTime+(own?0:d/343);             // sound travels at 343 m/s
-  // loud, sharp report: bright crack + wide-band blast + short mid body + low punch; the echo gives the tail
-  if(near>0.05) nz(t,bus,{type:'highpass',f:3000,q:0.7,dur:0.016,vol:vol*1.5*P.crack*near});            // "t" crack
-  nz(t,bus,{type:'bandpass',f:P.f,f2:P.f*0.55,q:0.55,dur:P.bd*2,vol:vol*1.7});                        // "tang" blast
-  nz(t,bus,{type:'lowpass',f:1900,f2:420,q:0.6,dur:0.12,vol:vol*1.25});                                 // body
-  nz(t,bus,{type:'bandpass',f:P.f*1.6,q:6,dur:0.05,vol:vol*0.3});                                       // metallic ring
-  tone(t,bus,{f:160,f2:55,dur:0.09,vol:vol*(0.45+P.low*0.6)});                                         // punch
-  if(own&&!WEAPONS[key].scope&&key!=='S686') nz(t+0.32+Math.random()*0.1,bus,{type:'bandpass',f:5200,q:9,dur:0.03,vol:0.05}); // brass tink
-  if(P.bolt&&d<70) boltSound(t+0.55,bus,vol*0.5);
+  if(own){
+    // full layered report, own weapon only: bright crack + wide-band blast + short mid body + low
+    // punch + metallic ring; the echo gives the tail. This is the one shot the whole mix has to
+    // carry, so it keeps every layer.
+    if(near>0.05) nz(t,bus,{type:'highpass',f:3000,q:0.7,dur:0.016,vol:vol*1.5*P.crack*near});            // "t" crack
+    nz(t,bus,{type:'bandpass',f:P.f,f2:P.f*0.55,q:0.55,dur:P.bd*2,vol:vol*1.7});                        // "tang" blast
+    nz(t,bus,{type:'lowpass',f:1900,f2:420,q:0.6,dur:0.12,vol:vol*1.25});                                 // body
+    nz(t,bus,{type:'bandpass',f:P.f*1.6,q:6,dur:0.05,vol:vol*0.3});                                       // metallic ring
+    tone(t,bus,{f:160,f2:55,dur:0.09,vol:vol*(0.45+P.low*0.6)});                                         // punch
+    if(!WEAPONS[key].scope&&key!=='S686') nz(t+0.32+Math.random()*0.1,bus,{type:'bandpass',f:5200,q:9,dur:0.03,vol:0.05}); // brass tink
+  } else {
+    // everyone else's gunfire gets a cheaper 2-layer report instead of the full 5-6 node mix above.
+    // An 8v8 DM fight can trigger dozens of these a second - at the old per-shot node count that was
+    // enough WebAudio nodes over the course of a match to bog the audio thread down, which read as
+    // sound dropping out mid-fight or (worse, once the graph fell far enough behind) going silent
+    // for the rest of the match. Two layers still reads as a gunshot; it just doesn't need to carry
+    // the mix the way the player's own weapon does.
+    nz(t,bus,{type:'bandpass',f:P.f,f2:P.f*0.55,q:0.55,dur:P.bd*2,vol:vol*1.7});                        // "tang" blast
+    tone(t,bus,{f:160,f2:55,dur:0.08,vol:vol*(0.4+P.low*0.5)});                                          // punch
+  }
+  if(P.bolt&&d<(own?70:35)) boltSound(t+0.55,bus,vol*0.5);
 }
 function mechClick(t,dest,f,vol){nz(t,dest,{type:'bandpass',f,q:6,dur:0.016,vol});tone(t,dest,{type:'triangle',f:f*0.33,f2:f*0.24,dur:0.03,vol:vol*0.35});}
 function boltSound(t,dest,vol){mechClick(t,dest,2400,vol);nz(t+0.07,dest,{type:'bandpass',f:1700,f2:3200,q:2,dur:0.09,vol:vol*0.45});mechClick(t+0.19,dest,2000,vol*0.9);nz(t+0.24,dest,{type:'bandpass',f:3000,f2:1600,q:2,dur:0.08,vol:vol*0.4});mechClick(t+0.33,dest,2700,vol*0.8);}
@@ -2483,9 +2509,9 @@ function dmPickAirstrikePts(){
       let x,z;
       if(pool.length){
         const a=pick(pool);
-        x=clamp(a.pos.x+rnd(-9,9),DM_OX+side*10,DM_OX+side*68);
+        x=clamp(a.pos.x+rnd(-9,9),DM_OX+side*10,DM_OX+side*(DM_HALF_X-4));
         z=clamp(a.pos.z+rnd(-9,9),DM_OZ-DM_HALF_Z+8,DM_OZ+DM_HALF_Z-8);
-      } else { x=DM_OX+side*rnd(10,68); z=DM_OZ+rnd(-DM_HALF_Z+8,DM_HALF_Z-8); }
+      } else { x=DM_OX+side*rnd(10,DM_HALF_X-4); z=DM_OZ+rnd(-DM_HALF_Z+8,DM_HALF_Z-8); }
       pts.push({x,z});
     }
   }
@@ -2724,15 +2750,17 @@ function resolve(a){
   // the deathmatch arena lives far away at the DM_OX offset - without this branch every DM actor
   // got yanked back onto the BR island's edge every frame, collapsing all 10 players into one spot
   if(G.dm){
-    // the boundary mountain ring only GUARANTEES its inner face stays clear of DM_HALF_X/Z by
-    // MTN_MARGIN (3) - see the worst-case math in buildDeathmatchMap's mountain-ring comment. This
-    // clamp used to let a player push 8 past DM_HALF_X/Z, which is well past that 3-unit guarantee:
-    // at the edges/corners a peak could land as close as +3, so the old +8 clamp could shove a
-    // player 5 units deep into solid mountain geometry with no further collision resolution against
-    // it afterward - "sinking into the ground" as the physics tried to reconcile being embedded in a
-    // box. +2 stays inside the guaranteed-clear zone on every seed, not just the ones that roll lucky.
-    a.pos.x=clamp(a.pos.x,DM_OX-DM_HALF_X-2,DM_OX+DM_HALF_X+2);
-    a.pos.z=clamp(a.pos.z,DM_OZ-DM_HALF_Z-2,DM_OZ+DM_HALF_Z+2);
+    // the boundary mountain ring's own worst-case inner face sits at DM_HALF_X/Z + ~1 (see MTN_GAP
+    // in buildDeathmatchMap's mountain-ring comment) - the ring is tight enough now that normal box
+    // collision above already stops a player right at its face almost everywhere. This clamp used to
+    // add its own extra margin on top of DM_HALF_X/Z (first +8, then +2), which is exactly the wrong
+    // direction: any margin here is slack the mountain's own 1-unit guarantee doesn't actually have,
+    // and a player who somehow outran collision (a corner, a fast lunge) could get clamped straight
+    // into solid rock with nothing left to resolve them back out - "sinking into the ground". Clamped
+    // to DM_HALF_X/Z exactly instead: it can never place anyone anywhere collision hasn't already
+    // cleared, on any seed.
+    a.pos.x=clamp(a.pos.x,DM_OX-DM_HALF_X,DM_OX+DM_HALF_X);
+    a.pos.z=clamp(a.pos.z,DM_OZ-DM_HALF_Z,DM_OZ+DM_HALF_Z);
   } else {
     const r=Math.hypot(a.pos.x,a.pos.z);if(r>430){a.pos.x*=430/r;a.pos.z*=430/r;}
   }
@@ -3110,13 +3138,14 @@ function updatePlayer(dt){
   if(G.nearSel>=G.nearItems.length)G.nearSel=0;
   G.nearLoot=G.nearItems[G.nearSel]||null;
   if(G.nearLoot&&pressed.has('KeyF')&&!G.invOpen){localPickup(G.nearLoot);G.nearSel=0;}
-  // burst mode (M416's altZoom toggle): one trigger pull queues a fixed 3-round burst that keeps
-  // firing on its own (each shot still gated by the normal fireCd/rpm) even if the mouse is
-  // released partway through, the way a real burst trigger group works - not "auto, but interrupted
-  // after 3 shots if you're still holding", which is what reusing the auto path here would give
+  // burst mode (M416's altZoom toggle): a trigger pull fires up to 3 rounds, capped by whichever
+  // comes first - 3 shots (each still gated by the normal fireCd/rpm) or letting go of the mouse.
+  // A quick tap fires just 1 (or however many the fire rate allows before release), holding it down
+  // gets you the full 3 and then stops - a real burst group doesn't keep dumping rounds after the
+  // trigger's already been released.
   const burstMode=!!(def&&def.burstAlt&&p.scopeAlt);
   if(burstMode&&mouse.clicked)p.burstLeft=3;
-  if(!G.invOpen&&def&&(burstMode?p.burstLeft>0:mouse.left&&(def.auto||mouse.clicked))){
+  if(!G.invOpen&&def&&(burstMode?mouse.left&&p.burstLeft>0:mouse.left&&(def.auto||mouse.clicked))){
     const dir=playerAimDir(); const origin=G.scoped||G.fp||G.aimScope?camera.position.clone():muzzleOf(p,new V3());
     if(tryFire(p,dir,origin)&&burstMode)p.burstLeft--;
   }
@@ -3379,7 +3408,7 @@ function dmBotWander(b){
   const side=b.team===0?1:-1,z=DM_OZ+rnd(-40,40);
   // snipers/support hang back near their own side instead of crossing into the open - assault
   // bots push all the way across to the enemy's side so the two teams actually cross paths
-  const mid=b.dmRole==='sniper'?DM_OX+side*rnd(0,26):DM_OX+side*rnd(12,66);
+  const mid=b.dmRole==='sniper'?DM_OX+side*rnd(0,26):DM_OX+side*rnd(12,DM_HALF_X-4);
   setGoal(b,mid,z,'dm');
   B.urgent=true;   // sprint speed while closing distance - this is a TDM, not a stealth crawl
 }
@@ -3924,6 +3953,10 @@ function updateCamera(dt){
     // dead: a slow-tracking bird's-eye view of the ongoing fight instead of idling near your own
     // corpse - averages every currently-living actor's ground position so it follows the action
     // wherever it is, then eases toward that point rather than snapping straight to it every frame.
+    // whatever scope/ADS state you died mid-fight with (Kar98k scoped in, MG aimScope, etc.) has to
+    // be cleared here too, every frame - otherwise the scope overlay/FOV zoom from the moment of
+    // death just sits on top of the overhead spectate view for the whole respawn wait.
+    if(G.scoped||G.ads||G.aimScope){G.scoped=false;G.ads=false;G.aimScope=false;}
     let sx=0,sz=0,n=0;
     for(const a of actors){ if(a.alive&&(a.state==='ground'||a.state==='chute')){sx+=a.pos.x;sz+=a.pos.z;n++;} }
     const cx=n?sx/n:p.pos.x, cz=n?sz/n:p.pos.z;

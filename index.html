@@ -2407,12 +2407,23 @@ function dismountMG(p){
   if(!p.slots[p.cur]){const s=p.slots.findIndex(Boolean);if(s>=0)p.cur=s;}
   if(mg.gunMesh) mg.gunMesh.rotation.set(0,0,0);
 }
+// deathmatch kill-heal: bandages barely see use here (infinite ammo + timed respawns make "just
+// fight it out" the default instead of ever backing off to patch up), so a kill itself now grants
+// 50% HP back over 3 seconds instead - ticked in actorTick, well clear of finishHeal/the bandage
+// item's own healT so kill-healing never blocks firing/reloading the way using an item does.
+// Stacks on a fresh kill (adds to whatever's left of a still-running one) and always finishes
+// exactly 3s after the LATEST kill, not the first.
+function dmGrantKillHeal(a){
+  a.regenLeft=Math.min((a.regenT>0?a.regenLeft:0)+50,100);
+  a.regenT=3;a.regenRate=a.regenLeft/a.regenT;
+}
 function dmKill(v,k,wname,head){
   if(v.mg) dismountMG(v);
-  v.alive=false;v.hp=0;v.healT=0;v.reloadT=0;v.deadT=0;v.respawnT=DM.respawnWait;v.deaths=(v.deaths||0)+1;
+  v.alive=false;v.hp=0;v.healT=0;v.reloadT=0;v.deadT=0;v.regenT=0;v.regenLeft=0;v.respawnT=DM.respawnWait;v.deaths=(v.deaths||0)+1;
   const u=v.mesh.userData;u.chute.visible=false;u.flash.visible=false;
   if(k&&k.team!==v.team){
     k.kills++;DM.score[k.team]=(DM.score[k.team]||0)+1;
+    if(k.alive)dmGrantKillHeal(k);
     if(!k.isPlayer&&k.brain&&k.brain.target===v)k.brain.target=null;
     // skip the tier check on the kill that ends the match - it's always a multiple-of-10 crossing
     // at DM.target(50), so without this the win screen was preceded by a fresh air-raid siren every time
@@ -3456,6 +3467,14 @@ function actorTick(a,dt){
   a.fireCd-=dt;
   if(a.reloadT>0){a.reloadT-=dt;if(a.reloadT<=0)finishReload(a);}
   if(a.healT>0){a.healT-=dt;if(a.healT<=0)finishHeal(a);}
+  // deathmatch kill-heal (see dmGrantKillHeal): a plain HP-over-time trickle, deliberately separate
+  // from the bandage/medkit healT above - it doesn't block firing/reloading/sprinting the way a
+  // real heal-item use does, it just quietly tops you up while you keep fighting.
+  if(a.regenT>0){
+    const d2=Math.min(dt,a.regenT),heal=Math.min(a.regenRate*d2,100-a.hp,a.regenLeft);
+    if(heal>0){a.hp=Math.min(100,a.hp+heal);a.regenLeft-=heal;}
+    a.regenT=Math.max(0,a.regenT-dt);
+  }
   if(a.boltT>0)a.boltT=Math.max(0,a.boltT-dt);
   a.flashT-=dt;
   if(a.state==='plane'){g.visible=false;return;}

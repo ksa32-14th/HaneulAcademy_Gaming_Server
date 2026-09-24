@@ -6,7 +6,7 @@
 <title>Last Circle</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Noto+Sans+KR:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Noto+Sans+KR:wght@400;500;700&family=Noto+Sans+JP:wght@500;700&family=Noto+Sans+SC:wght@500;700&display=swap">
 <style>
 :root{
   --ink:#0b1014; --panel:rgba(10,15,19,.58); --line:rgba(236,239,230,.16);
@@ -694,7 +694,7 @@ const camera=new THREE.PerspectiveCamera(70,innerWidth/innerHeight,0.1,2500);
 camera.rotation.order='YXZ';
 const hemi=new THREE.HemisphereLight(0xe8f2ff,0x6b6a50,0.82);scene.add(hemi);
 // steady fill so shaded interiors never go murky
-scene.add(new THREE.AmbientLight(0xfff2e0,0.2));
+const ambLight=new THREE.AmbientLight(0xfff2e0,0.2);scene.add(ambLight);
 // soft warm bounce light around the player, only while indoors (local, so the rest of the world doesn't change)
 const bounce=new THREE.PointLight(0xffe6c4,0,11,1.6);scene.add(bounce);
 const sun=new THREE.DirectionalLight(0xfff0d2,0.85);
@@ -1598,10 +1598,50 @@ const NEON_FACADE_COLS=[0x24262b,0x2c2f36,0x1c1e23,0x333842,0x2a2d33];
 const NEON_SIGN_COLS=[0xff2d95,0x29e0ff,0xb537f2,0xff5b3d,0x39ff8f,0xffd23d];
 const NEON_TEAM_COL_MAP=[0x2f5fa8,0xa8342f]; // same values as DM_TEAM_COL, duplicated here since that
                                               // const isn't defined yet at this point in the file
-// unlit sign/glow mesh - MeshBasicMaterial so it reads bright regardless of the shared scene sun,
-// added straight to the scene (not through addBox/DRAW - it's cosmetic, never collides)
-function neonSign(x,y,z,w,h,rotY,color){
-  const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,0.1),new THREE.MeshBasicMaterial({color}));
+// short generic signage words (kept to common, non-brand nouns - ramen/sushi/tea/etc, not real store
+// names), split by script so a sign only ever draws from one and never mixes glyph sets
+const NEON_JP_TEXT=['ラーメン','寿司','酒場','焼肉','カラオケ','両替','居酒屋','食堂','24時','喫茶'];
+const NEON_CN_TEXT=['面馆','茶馆','酒吧','网吧','药店','便利店','夜市','小吃','电玩','火锅'];
+const NEON_TEXT_POOL=[...NEON_JP_TEXT,...NEON_CN_TEXT];
+// canvas-drawn sign face: a glowing border + the word itself, vertical (stacked one character per
+// line, the common orientation for real hanging signboards) or horizontal. Text is baked into the
+// canvas once at draw time - if the Noto Sans JP/SC webfonts haven't finished downloading yet that
+// first draw can fall back to the OS default font, so every sign's draw() is re-run and its texture
+// flagged for re-upload once document.fonts.ready resolves, instead of leaving it wrong all match.
+const neonSignRedraws=[];
+function neonSignTexture(text,color,vertical){
+  const cvs=document.createElement('canvas');
+  cvs.width=vertical?128:320; cvs.height=vertical?448:160;
+  const hex='#'+color.toString(16).padStart(6,'0');
+  const draw=()=>{
+    const ctx=cvs.getContext('2d');
+    ctx.clearRect(0,0,cvs.width,cvs.height);
+    ctx.fillStyle='#0a0a10';ctx.fillRect(0,0,cvs.width,cvs.height);
+    ctx.strokeStyle=hex;ctx.lineWidth=6;ctx.strokeRect(7,7,cvs.width-14,cvs.height-14);
+    ctx.fillStyle=hex;ctx.shadowColor=hex;ctx.shadowBlur=20;
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    const chars=[...text],font='"Noto Sans JP","Noto Sans SC","Noto Sans KR",sans-serif';
+    if(vertical){
+      ctx.font=`700 62px ${font}`;
+      const lh=68,startY=cvs.height/2-(chars.length-1)*lh/2;
+      chars.forEach((c,i)=>ctx.fillText(c,cvs.width/2,startY+i*lh));
+    } else {
+      ctx.font=`700 ${Math.floor(210/Math.max(2,chars.length))}px ${font}`;
+      ctx.fillText(text,cvs.width/2,cvs.height/2+2);
+    }
+  };
+  draw();
+  const tex=new THREE.CanvasTexture(cvs);
+  neonSignRedraws.push({draw,tex});
+  return tex;
+}
+if(document.fonts&&document.fonts.ready) document.fonts.ready.then(()=>{ for(const s of neonSignRedraws){s.draw();s.tex.needsUpdate=true;} });
+// unlit sign mesh (textured if text is given, flat-coloured otherwise) - MeshBasicMaterial so it
+// reads bright regardless of the shared scene sun, added straight to the scene (not through
+// addBox/DRAW - it's cosmetic, never collides)
+function neonSign(x,y,z,w,h,rotY,color,text){
+  const mat=text?new THREE.MeshBasicMaterial({map:neonSignTexture(text,color,h>w)}):new THREE.MeshBasicMaterial({color});
+  const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,0.08),mat);
   m.position.set(x,y,z);m.rotation.y=rotY;scene.add(m);return m;
 }
 function neonGlow(x,y,z,color,intensity,range){
@@ -1621,39 +1661,47 @@ function neonDumpster(cx,cz,rot){
   e.box(-l/2-0.05,h,-w/2-0.05,l/2+0.05,h+0.12,w/2+0.05,0x2c3624);
   NEON_PROPS.push({x0:cx-l/2,x1:cx+l/2,z0:cz-w/2,z1:cz+w/2,type:'container'});
 }
-// a flat-roofed block with an optional exterior staircase up one face (same climbable-step technique
-// as the MG bunker stairs below - each step's rise stays under the ~0.4 auto-step threshold so it's
-// walkable, not a jump-only climb). side is 'zMin'/'zMax'/'xMin'/'xMax' - which face the stair climbs,
-// named by which edge it starts from rather than a compass direction to keep the two axes unambiguous.
-function neonBlock(lx,lz,w,d,h,side){
-  const cx=NEON_OX+lx,cz=NEON_OZ+lz;
-  const x0=cx-w/2,x1=cx+w/2,z0=cz-d/2,z1=cz+d/2,y0=NEON_GROUND,y1=NEON_GROUND+h;
-  addBox(x0,y0,z0,x1,y1,z1,NEON_FACADE_COLS[Math.floor(srand()*NEON_FACADE_COLS.length)]);
-  const roofY=y1+0.3;
-  addBox(x0-0.3,y1,z0-0.3,x1+0.3,roofY,z1+0.3,0x1a1c20);
-  NEON_PROPS.push({x0,x1,z0,z1,type:'building'});
-  let stairBase=null;
-  if(side){
-    const stepN=Math.max(8,Math.ceil(roofY/0.36)),stepRun=0.32,stepRise=roofY/stepN;
-    const horiz=side==='zMin'||side==='zMax';
-    const faceFixed=side==='zMin'?z0:side==='zMax'?z1:side==='xMin'?x0:x1;
-    const dir=(side==='zMin'||side==='xMin')?-1:1;
-    const midA=horiz?cx:cz,halfSpan=1.1;
-    for(let i=1;i<=stepN;i++){
-      const a=faceFixed+dir*(i-1)*stepRun,b=faceFixed+dir*i*stepRun,topY=roofY-(i-1)*stepRise;
-      if(horiz) addBox(midA-halfSpan,y0,Math.min(a,b),midA+halfSpan,topY,Math.max(a,b),0x33383f);
-      else addBox(Math.min(a,b),y0,midA-halfSpan,Math.max(a,b),topY,midA+halfSpan,0x33383f);
-    }
-    const far=faceFixed+dir*stepN*stepRun;
-    stairBase=horiz?{x:midA,z:far}:{x:far,z:midA};
-  }
-  return {x0,x1,z0,z1,y0,roofY,cx,cz,stairBase};
+// street vending machine: a plain body box (collidable, via a noDraw addBox so it doesn't double up
+// with the Group's own visible box) plus a bright lit front panel carrying its own little glow light
+const NEON_VEND_COLS=[0xd6242f,0x1f6fd6,0x1c1c1c,0x2c8a4a];
+function neonVending(cx,cz,rotY){
+  const bodyCol=NEON_VEND_COLS[Math.floor(srand()*NEON_VEND_COLS.length)];
+  const g=new THREE.Group();
+  g.add(M(gB(0.9,1.8,0.7),bodyCol,0,0.9,0));
+  const panel=new THREE.Mesh(new THREE.PlaneGeometry(0.68,1.25),new THREE.MeshBasicMaterial({color:0xdfefff}));
+  panel.position.set(0,0.95,0.355);g.add(panel);
+  g.position.set(cx,0,cz);g.rotation.y=rotY;
+  g.traverse(m=>{if(m.isMesh)m.castShadow=true;});
+  scene.add(g);
+  neonGlow(cx+Math.sin(rotY)*0.4,1.1,cz+Math.cos(rotY)*0.4,0x8fd8ff,0.5,4);
+  addBox(cx-0.48,0,cz-0.38,cx+0.48,1.82,cz+0.38,bodyCol,{noDraw:true});
+  NEON_PROPS.push({x0:cx-0.48,x1:cx+0.48,z0:cz-0.38,z1:cz+0.38,type:'container'});
 }
-// straight rooftop catwalk between two blocks of the same roof height, south one first - just a thin
-// walkable deck with a low rail on each side, slightly overlapping both roofs for a seamless join
+// wall-mounted AC condenser unit - pure cosmetic greeble, no collision (small enough nobody's
+// pathing is affected, and it's always flush against a wall a player can't stand inside anyway)
+function neonACUnit(x,y,z,rotY){
+  const g=new THREE.Group();
+  g.add(M(gB(0.62,0.42,0.42),0xaeb4b8,0,0,0));
+  // gC's cylinder is pre-rotated so its axis already runs along local Z - no extra rotation needed
+  // for a fan-vent disc facing straight out of the unit's front face
+  g.add(M(gC(0.14,0.05),0x2a2c2e,0,0,0.22));
+  g.position.set(x,y,z);g.rotation.y=rotY;g.traverse(m=>{if(m.isMesh)m.castShadow=true;});
+  scene.add(g);
+}
+// a straight exposed pipe run up a facade - cosmetic only, same reasoning as the AC units above.
+// Plain (unrotated) CylinderGeometry, not gC - its axis is Y by default, which is exactly what a
+// vertical run needs, unlike gC's own Z-axis cylinders used for horizontal barrels/AC vents.
+function neonPipe(x,z,y0,y1){
+  const len=y1-y0,m=new THREE.Mesh(new THREE.CylinderGeometry(0.06,0.06,len,6),lam(0x484c46));
+  m.position.set(x,(y0+y1)/2,z);m.castShadow=true;
+  scene.add(m);
+}
+// straight rooftop catwalk between a south-side and a north-side podium roof, same height - just a
+// thin walkable deck with a low rail on each side, slightly overlapping both roofs for a seamless join
 function neonCatwalk(south,north){
   const y=Math.min(south.roofY,north.roofY);
   const x0=Math.max(south.x0,north.x0)+0.3,x1=Math.min(south.x1,north.x1)-0.3;
+  if(x1<=x0) return;
   const z0=south.z1-0.4,z1=north.z0+0.4;
   addBox(x0,y,z0,x1,y+0.22,z1,0x24262b);
   addBox(x0,y+0.22,z0,x0+0.1,y+0.22+0.8,z1,0x14151a,{collide:false});
@@ -1679,31 +1727,95 @@ function buildNeonAlleyMap(){
     const m=new THREE.Mesh(g,new THREE.MeshLambertMaterial({vertexColors:true}));
     m.position.set(NEON_OX,NEON_GROUND,NEON_OZ);m.receiveShadow=true;scene.add(m);
   }
-  // boundary: tall building facades closing off every side, inner face flush with NEON_HALF_X/Z (the
-  // same value resolve()'s clamp uses) instead of a distant ring set back from it - the lesson from
-  // the original arena's own mountain-ring tightening earlier this project: any gap between the
-  // visual boundary and the actual position clamp is exactly where a player ends up "sinking" into
-  // geometry that isn't actually there yet, or standing in open air past everything solid.
+  // boundary: tall building facades closing off every side, inner (lane-facing) face flush with
+  // NEON_HALF_X/Z (the same value resolve()'s clamp uses) instead of a distant ring set back from it
+  // - the lesson from the original arena's own mountain-ring tightening earlier this project: any gap
+  // between the visual boundary and the actual position clamp is exactly where a player ends up
+  // "sinking" into geometry that isn't actually there yet, or standing in open air past everything
+  // solid. Every segment is two stacked boxes, not one: a full-width PODIUM up to a shared height
+  // (NEON_PODIUM_H) that most segments get an exterior stair onto - "climb either side of the alley,
+  // almost anywhere along it" - topped by a narrower, taller, non-climbable TOWER continuing the
+  // skyline, stepped back so the podium roof reads clearly as its own standable ledge/terrace. Podium
+  // roofs on facing segments at matching X get linked by a rooftop catwalk straight across the lane
+  // (see the loop right after both walls are built) - the long-alley-with-climbable-sides layout
+  // asked for, instead of a couple of isolated interior structures competing for space in the lane.
+  const NEON_PODIUM_H=9;
   const sideWall=(sign)=>{
-    const faceZ=NEON_OZ+sign*NEON_HALF_Z;
+    const faceZ=NEON_OZ+sign*NEON_HALF_Z,segs=[];
     let x=-NEON_HALF_X;
     while(x<NEON_HALF_X){
-      const w=sr(9,15),h=sr(34,60),d=sr(7,11);
+      const w=sr(9,15),towerH=sr(26,52),d=sr(7,11),towerIn=sr(0.8,1.8);
       const x0=NEON_OX+x,x1=Math.min(NEON_OX+NEON_HALF_X,x0+w);
       const z0=sign<0?faceZ-d:faceZ,z1=sign<0?faceZ:faceZ+d;
-      addBox(x0,NEON_GROUND,z0,x1,NEON_GROUND+h,z1,NEON_FACADE_COLS[Math.floor(srand()*NEON_FACADE_COLS.length)]);
+      const col=NEON_FACADE_COLS[Math.floor(srand()*NEON_FACADE_COLS.length)];
+      addBox(x0,NEON_GROUND,z0,x1,NEON_GROUND+NEON_PODIUM_H,z1,col);
+      addBox(x0-0.25,NEON_GROUND+NEON_PODIUM_H,z0-0.25,x1+0.25,NEON_GROUND+NEON_PODIUM_H+0.25,z1+0.25,0x1a1c20);
+      const tx0=x0+towerIn,tx1=x1-towerIn;
+      if(tx1>tx0+1.5) addBox(tx0,NEON_GROUND+NEON_PODIUM_H+0.25,z0,tx1,NEON_GROUND+towerH,z1,NEON_FACADE_COLS[Math.floor(srand()*NEON_FACADE_COLS.length)]);
       NEON_PROPS.push({x0,x1,z0,z1,type:'building'});
-      if(srand()<0.65){
-        const sw=Math.min((x1-x0)*0.65,4.2),sh=sr(1.3,2.8),sy=NEON_GROUND+sr(3,Math.min(h-4,28));
-        const col=NEON_SIGN_COLS[Math.floor(srand()*NEON_SIGN_COLS.length)];
-        const sz=sign<0?z1+0.08:z0-0.08;
-        neonSign((x0+x1)/2,sy,sz,sw,sh,0,col);
-        if(srand()<0.35) neonGlow((x0+x1)/2,sy,sz-sign*1.6,col,1.0,13);
+      const roofY=NEON_GROUND+NEON_PODIUM_H;
+      let stairBase=null,climbable=false;
+      if(srand()<0.6){
+        climbable=true;
+        const stepN=Math.max(8,Math.ceil(NEON_PODIUM_H/0.36)),stepRun=0.32,stepRise=NEON_PODIUM_H/stepN;
+        const midX=(x0+x1)/2,halfSpan=Math.min((x1-x0)/2-0.4,1.3);
+        const faceFixed=sign<0?z1:z0,dir=sign<0?1:-1;   // climbs INTO the lane, off the inner face
+        for(let i=1;i<=stepN;i++){
+          const a=faceFixed+dir*(i-1)*stepRun,b=faceFixed+dir*i*stepRun,topY=roofY-(i-1)*stepRise;
+          addBox(midX-halfSpan,NEON_GROUND,Math.min(a,b),midX+halfSpan,topY,Math.max(a,b),0x33383f);
+        }
+        stairBase={x:midX,z:faceFixed+dir*stepN*stepRun};
       }
+      segs.push({x0,x1,z0,z1,roofY,stairBase,climbable});
+      // signage: 1-2 per segment at podium height (full width available), plus a chance of one more
+      // up on the tower face itself (only within the tower's own narrower footprint). Half of podium
+      // signs jut out perpendicular to the wall on a short bracket instead of sitting flush - the
+      // overhanging-signboard look real alley photos have, not just flat wall plaques.
+      const innerZ=sign<0?z1:z0,faceRot=sign<0?0:Math.PI;
+      const signN=1+(srand()<0.6?1:0);
+      for(let k=0;k<signN;k++){
+        const text=NEON_TEXT_POOL[Math.floor(srand()*NEON_TEXT_POOL.length)],col=NEON_SIGN_COLS[Math.floor(srand()*NEON_SIGN_COLS.length)];
+        const sx=x0+sr(1.4,Math.max(1.6,(x1-x0)-1.4)),sy=NEON_GROUND+sr(2.2,NEON_PODIUM_H-1.4);
+        if(srand()<0.5){
+          const sw=sr(1.1,1.7),sh=sr(2.6,4.2);
+          neonSign(sx,sy,innerZ+sign*0.06,sw,sh,0,col,text);
+        } else {
+          const jut=sr(0.9,1.6),sw=sr(1.6,2.6),sh=sr(0.8,1.3);
+          neonSign(sx,sy,innerZ+sign*jut,sw,sh,faceRot+Math.PI/2,col,text);
+        }
+        if(srand()<0.3) neonGlow(sx,sy,innerZ+sign*1.7,col,1.0,12);
+      }
+      if(tx1>tx0+1.5&&srand()<0.5){
+        const text=NEON_TEXT_POOL[Math.floor(srand()*NEON_TEXT_POOL.length)],col=NEON_SIGN_COLS[Math.floor(srand()*NEON_SIGN_COLS.length)];
+        const sx=tx0+sr(0.8,Math.max(1,(tx1-tx0)-0.8)),sy=NEON_GROUND+NEON_PODIUM_H+sr(3,Math.max(4,towerH-6));
+        neonSign(sx,sy,innerZ+sign*0.06,sr(1.1,1.6),sr(2.8,4.4),0,col,text);
+      }
+      // AC condensers + a vertical pipe run, scattered up the podium face - the exposed-utility
+      // clutter that reads as "real back-street" rather than a clean showroom wall
+      for(let k=0;k<1+Math.floor(srand()*2);k++){
+        const ax=x0+sr(1,Math.max(1.2,(x1-x0)-1)),ay=NEON_GROUND+sr(1.6,NEON_PODIUM_H-1.2);
+        neonACUnit(ax,ay,innerZ+sign*0.22,faceRot);
+      }
+      if(srand()<0.7) neonPipe(x0+sr(0.6,1.4),innerZ+sign*0.1,NEON_GROUND,NEON_GROUND+NEON_PODIUM_H-0.5);
       x+=(x1-x0)+sr(0.3,1.1);
     }
+    return segs;
   };
-  sideWall(-1);sideWall(1);
+  const southSegs=sideWall(-1),northSegs=sideWall(1);
+  // rooftop catwalks: at a few points down the lane, bridge a climbable south podium to a climbable
+  // north one at (roughly) the same X - the actual "walk up one side, cross over, come down the
+  // other" route. Both walls were generated independently so their segment boundaries don't line up
+  // exactly; picking the nearest climbable segment on each side to a target X is simpler and more
+  // robust than trying to force the two loops to agree on breakpoints.
+  const nearestClimbable=(segs,x)=>{
+    let best=null,bd=Infinity;
+    for(const s of segs){ if(!s.climbable) continue; const d=Math.abs((s.x0+s.x1)/2-x); if(d<bd){bd=d;best=s;} }
+    return bd<7?best:null;
+  };
+  for(const cx of [-24,-13,0,13,24]){
+    const s=nearestClimbable(southSegs,NEON_OX+cx),n=nearestClimbable(northSegs,NEON_OX+cx);
+    if(s&&n) neonCatwalk(s,n);
+  }
   const endWall=(sign)=>{
     const faceX=NEON_OX+sign*NEON_HALF_X;
     let z=-NEON_HALF_Z;
@@ -1783,25 +1895,16 @@ function buildNeonAlleyMap(){
     NEON_MGS.push({x:gx,y:y1,z:tz,yaw,team,occupant:null,mag:50,mesh:base,gunMesh:gun,stairBase});
     neonGlow(bk.x,y1+2,tz,NEON_TEAM_COL_MAP[team],1.1,15);
   }
-  // interior structures: two mirrored twin-block "gates" (each pair linked by a rooftop catwalk
-  // straight across the lane, stairs facing outward away from their own partner so the ground route
-  // and the climb never physically overlap) plus one taller solo watchtower dead centre - the
-  // vertical routes requested, without needing the boundary itself to be climbable
-  const twinL_s=neonBlock(-12,-5,7,6,8,'zMin'),twinL_n=neonBlock(-12,5,7,6,8,'zMax');
-  neonCatwalk(twinL_s,twinL_n);
-  const twinR_s=neonBlock(12,-5,7,6,8,'zMin'),twinR_n=neonBlock(12,5,7,6,8,'zMax');
-  neonCatwalk(twinR_s,twinR_n);
-  neonBlock(0,0,6,6,11,'zMin');
-  for(const blk of [twinL_s,twinL_n,twinR_s,twinR_n]){
-    neonSign(blk.cx,blk.y0+sr(2,5),blk.z0-0.06,2.6,1.6,0,NEON_SIGN_COLS[Math.floor(srand()*NEON_SIGN_COLS.length)]);
-  }
-  // ground-level clutter for cover in the open flanks between each base, the twin gates and the
-  // centre. Kept clear of both the twin gates (x=+-12, half-width 3.5) and each team's own spawn
-  // scatter (frontSpawns lands at x = base +- 5..8, i.e. roughly x=-23..-20 / 20..23 - a prop sitting
-  // right in that band could spawn a player wedged against it, unable to move on the very first
-  // frame) - x=+-17 sits in the gap between the two with a clear margin on both sides.
+  // ground-level clutter down the open centre lane: crates/dumpsters for cover, vending machines for
+  // flavour (each one also a small physical obstacle - see neonVending). Kept clear of both the
+  // podium walls' own footprint and each team's spawn scatter (frontSpawns lands at roughly
+  // x=-23..-20 / 20..23 - a prop sitting right there could spawn a player wedged against it, unable
+  // to move on the very first frame) - x=+-17 and the centre keep a clear margin from both.
   for(const[lx,lz]of[[-17,10],[-17,-11],[17,-10],[17,11],[-6,-13],[6,13],[-6,13],[6,-13]]){
     if(srand()<0.5) neonCrate(NEON_OX+lx,NEON_OZ+lz); else neonDumpster(NEON_OX+lx,NEON_OZ+lz,Math.floor(srand()*2));
+  }
+  for(const[lx,lz,rot]of[[-3,-4,0],[3,4,Math.PI],[-9,2,Math.PI/2],[9,-2,-Math.PI/2]]){
+    neonVending(NEON_OX+lx,NEON_OZ+lz,rot);
   }
   // a strip of hanging red-lantern markers down both boundary walls - understated East Asian
   // back-street flavour without needing real geometry, just small glowing spheres on a thin wire
@@ -5136,10 +5239,36 @@ function localPickup(it){
 }
 
 // ---------- loop
+// the neon alley is meant to read as night, but the sun/hemi/ambient/sky-dome/fog are all single
+// shared objects the BR island's own daytime also depends on - rather than a second light rig, just
+// swap those objects' own values based on which arena is actually live right now, and swap them back
+// the moment it isn't. Only touches anything on the frame arenaNight actually flips, not every frame.
+let arenaNight=false;
+function updateArenaAmbience(){
+  const wantNight=G.state==='play'&&G.dm&&G.dmMap==='neon';
+  if(wantNight===arenaNight) return;
+  arenaNight=wantNight;
+  if(wantNight){
+    scene.background.setHex(0x05060d);
+    scene.fog.color.setHex(0x05060d);scene.fog.near=50;scene.fog.far=230;
+    sky.visible=false;
+    hemi.intensity=0.26;hemi.color.setHex(0x2c3f66);hemi.groundColor.setHex(0x0c0c14);
+    ambLight.intensity=0.1;
+    sun.intensity=0.08;
+  } else {
+    scene.background.setHex(HORIZON);
+    scene.fog.color.setHex(HORIZON);scene.fog.near=150;scene.fog.far=640;
+    sky.visible=true;
+    hemi.intensity=0.82;hemi.color.setHex(0xe8f2ff);hemi.groundColor.setHex(0x6b6a50);
+    ambLight.intensity=0.2;
+    sun.intensity=0.85;
+  }
+}
 let last=performance.now();
 function frame(now){
   requestAnimationFrame(frame);
   const dt=Math.min(0.05,(now-last)/1000);last=now;
+  updateArenaAmbience();
   if(G.state==='menu'){menuCamera(now);for(const a of showcase)actorTick(a,dt);renderer.render(scene,camera);pressed.clear();return;}
   if(showcase.length){for(const a of showcase)scene.remove(a.mesh);showcase.length=0;}
   // browsers can silently suspend the AudioContext (tab backgrounded, screen lock, an OS interrupt
@@ -5173,6 +5302,7 @@ function frame(now){
 requestAnimationFrame(frame);
 })();
 </script>
+
 
 </body>
 </html>

@@ -191,6 +191,14 @@ button.go.small{padding:9px 18px;font-size:13px;letter-spacing:.08em}
 .rpRow .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .rpRow .tag{font-family:var(--disp);font-size:10px;letter-spacing:.08em;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:2px 7px}
 .rpRow.host .tag{color:var(--amber);border-color:rgba(242,179,61,.5)}
+.rpRow.team0{border-left:3px solid #4f8cff}
+.rpRow.team1{border-left:3px solid #ff4b3e}
+.rpRow .tag.team0{color:#8fb6ff;border-color:rgba(79,140,255,.5)}
+.rpRow .tag.team1{color:#ff9c92;border-color:rgba(255,75,62,.5)}
+.teamBtn.team0{border-color:rgba(79,140,255,.5)}
+.teamBtn.team1{border-color:rgba(255,75,62,.5)}
+.teamBtn.active.team0{background:rgba(79,140,255,.22);color:#fff}
+.teamBtn.active.team1{background:rgba(255,75,62,.22);color:#fff}
 #totalRow{flex-direction:row;align-items:center;flex-wrap:wrap;gap:10px 12px}
 #totalRow input{flex:1;min-width:120px;accent-color:var(--amber);pointer-events:auto}
 #mpFillMsg{margin-top:-6px}
@@ -443,6 +451,10 @@ body.touch #minimap{pointer-events:auto;cursor:pointer;position:relative;z-index
         <button id="mpCopyLinkBtn" class="go alt small" type="button">초대 링크 복사</button>
       </div>
       <p class="note" id="mpCopyMsg">코드나 링크를 친구에게 보내면 바로 함께할 수 있습니다.</p>
+      <div class="btnRow" id="teamPickRow" hidden>
+        <button id="mpTeam0Btn" class="go alt small teamBtn team0" type="button">블루팀</button>
+        <button id="mpTeam1Btn" class="go alt small teamBtn team1" type="button">레드팀</button>
+      </div>
       <div id="roomPlayers" class="roomPlayers"></div>
       <label class="toggleRow" id="mpModeRow"><input type="checkbox" id="mpDM">데스매치 (8v8 고정, 배틀로얄 대신)</label>
       <label class="fld" id="totalRow">총 인원 (사람 + 봇)<input id="mpTotal" type="range" min="2" max="50" value="20"><span id="mpTotalOut" class="codeTag">20명</span></label>
@@ -1596,7 +1608,7 @@ const WEAPONS={
   // holding right-click on top of that engages aimScope for an actual zoomed-in view of the aim
   // point (no scope overlay - it has no scope:true - just the FOV zoom, same mechanism as every
   // other weapon's ADS), but the spread itself barely tightens even then.
-  MG:    {name:'저지기관총',ammo:'MG',dmg:38,rpm:650,auto:true,mag:50,spread:0.062,reload:4.5,range:500,zoom:2.5,pellets:1,recoil:0.028,hz:0.3,muz:1.05,rank:5,kind:'mg',mounted:true},
+  MG:    {name:'저지기관총',ammo:'MG',dmg:38,rpm:650,auto:true,mag:50,spread:0.047,reload:4.5,range:500,zoom:2.5,pellets:1,recoil:0.028,hz:0.3,muz:1.05,rank:5,kind:'mg',mounted:true},
 };
 const WEIGHTS=[['UMP45',20],['M416',17],['AKM',19],['S686',15],['P92',15],['Kar98k',24]];
 const AMMO_COL={'9mm':0xe8c35a,'5.56':0x7fc65a,'7.62':0xe0873a,'12G':0xcc4b45,'MG':0x9aa0a6};
@@ -3170,11 +3182,15 @@ function chooseWeapon(b,dist){
       if(d.kind==='sniper')sc+=dist>45?3:dist<15?-2:0;
       if(d.kind==='dmr')sc+=dist>25?2:dist<10?-2:0;
     }
-    // role bias: a gentle nudge, not a lock - only enough to break a near-tie. At the extremes the
-    // distance terms above (now much stronger for sniper/DMR outside long range) still win on their
-    // own, so even a sniper-role bot drops the bolt-action for rapid-fire once a fight is up close.
-    if(G.dm&&b.dmRole==='sniper'&&(d.kind==='sniper'||d.kind==='dmr'))sc+=1.2;
-    if(G.dm&&b.dmRole==='assault'&&(d.kind==='ar'||d.kind==='smg'))sc+=1.2;
+    // role bias: strong enough that the assigned role is actually what a bot plays, not just a
+    // cosmetic label. The global longRange cutoff above (32) is tuned for a bot with no particular
+    // preference; a bot actually built as a marksman should keep using its rifle through most
+    // mid-range fights too, not fold to its sidearm-tier auto weapon the moment someone's inside
+    // 32m - so the bonus is large enough to outweigh that close-range penalty entirely, except at
+    // true point-blank range (<10) where even a dedicated sniper sensibly drops the bolt-action.
+    // Assault-role bots get a smaller but still decisive push the other way, away from rifles.
+    if(G.dm&&b.dmRole==='sniper'&&(d.kind==='sniper'||d.kind==='dmr'))sc+=dist<10?1.5:4.6;
+    if(G.dm&&b.dmRole==='assault'&&(d.kind==='ar'||d.kind==='smg'))sc+=2;
     if(sc>score){score=sc;best=s;}}
   if(best>=0&&best!==b.cur) switchTo(b,best);
 }
@@ -4056,8 +4072,11 @@ function newGameDM(netCfg){
   clearGame();
   G.dm=true;DM.score=[0,0];DM.timer=0;DM.feedQ=[];DM.target=50;DM.limit=900;DM.respawnWait=6;DM.airstrikeTier=0;
   if(DM_MGS)DM_MGS.forEach(m=>m.occupant=null);   // a fresh match rebuilds actors from scratch - drop any stale occupant reference from the last one
-  const humans=netCfg?[{id:netCfg.myId,name:netCfg.myName,isMe:true},...netCfg.humans.map(h=>({id:h.id,name:h.name}))]:[{id:'solo',name:'나',isMe:true}];
-  humans.forEach((h,i)=>h.team=i%2);
+  const humans=netCfg?[{id:netCfg.myId,name:netCfg.myName,isMe:true,team:netCfg.myTeam},...netCfg.humans.map(h=>({id:h.id,name:h.name,team:h.team}))]:[{id:'solo',name:'나',isMe:true,team:0}];
+  // team is whatever each player actually picked in the lobby (see teamPickRow/hostPickTeam) - only
+  // falls back to alternating by join order if one somehow reached here without a pick (shouldn't
+  // normally happen, since dmAssignTeam gives everyone a team the moment they join a DM room)
+  humans.forEach((h,i)=>{ if(typeof h.team!=='number') h.team=i%2; });
   for(const h of humans){
     const a=new Actor(!!h.isMe,h.name,DM_TEAM_COL[h.team]);
     a.id=h.id;a.team=h.team;a.shirtColor=DM_TEAM_COL[h.team];
@@ -4072,10 +4091,15 @@ function newGameDM(netCfg){
   }
   // rough role split per team: one bot mans the MG, a handful hang back and snipe/support from
   // elevated ground, the rest push and fight in the basin - see dmBotWander/chooseWeapon for how
-  // each role actually behaves
+  // each role actually behaves. Loadouts are varied by role too (not just the shared UMP45/Kar98k
+  // default every actor starts with) so three "sniper" bots don't all show up carrying the exact
+  // same rifle, and so an assault bot's rapid-fire choice actually differs teammate to teammate.
   for(let team=0;team<2;team++){
     const bots=actors.filter(a=>a.team===team&&!a.isPlayer&&!a.human);
-    bots.forEach((b,i)=>{ b.dmRole=i===0?'mg':i<4?'sniper':'assault'; });
+    bots.forEach((b,i)=>{
+      b.dmRole=i===0?'mg':i<4?'sniper':'assault';
+      b.dmLoadout={ar:pick(DM_AR),dmr:pick(DM_DMR)};
+    });
   }
   for(const a of actors) dmPlaceAtSpawn(a);
   Object.assign(G,{state:'play',paused:false,time:0,ads:false,scoped:false,aimScope:false,scopeToggle:false,recoilAcc:0,camKick:0,dmgDealt:0,hurt:0,bigmap:false,nearLoot:null,nearItems:[],nearSel:0,invOpen:false,lookX:0,lookY:0,hpShown:100,hpGhost:100,ghostHold:0,dm:true});
@@ -4307,7 +4331,7 @@ async function createRoom(){
   catch(e){ netRoomMsg('이 브라우저/네트워크에서는 방을 열 수 없습니다.','mpHomeMsg'); return; }
   peer.on('open',()=>{
     G.net={mode:'host',myId:'host',myName:name,roomCode:code,total:20,started:false,
-      players:new Map([['host',{id:'host',name,ready:true,host:true,conn:null}]]),
+      players:new Map([['host',{id:'host',name,ready:true,host:true,conn:null,team:0}]]),
       suppressLootDiff:false,diffTake:[],diffDrop:[],tickAcc:0};
     $('roomCode').textContent=code;
     $('lobbyHome').hidden=true;$('lobbyRoom').hidden=false;
@@ -4374,6 +4398,9 @@ async function joinRoom(){
       $('lobbyHome').hidden=true;$('lobbyRoom').hidden=false;
       $('roomCode').textContent=code;
       $('mpReadyBtn').hidden=false;$('mpStartBtn').hidden=true;$('totalRow').hidden=true;
+      // both are host-only controls - a client would otherwise see a checkbox/slider that looks
+      // interactive but silently does nothing (onHostMessage-side handlers no-op for non-hosts)
+      $('mpDM').disabled=true;$('mpTotal').disabled=true;
       $('mpReadyBtn').textContent='준비 완료';G.net.ready=false;
       renderLobby();
     });
@@ -4394,19 +4421,38 @@ function netLeaveRoom(){
   try{ history.replaceState(null,'',location.pathname+location.search); }catch(e){}
   $('lobbyHome').hidden=true;$('lobbyRoom').hidden=true;$('menu').hidden=false;
 }
+// team picking (deathmatch lobby only): every player - host included - picks their own side instead
+// of being auto-alternated by join order, and everyone in the room can see the current split before
+// the match starts. dmAssignTeam gives a newcomer (or an existing player when DM first gets toggled
+// on) a sensible default - whichever side currently has fewer people, ties to team 0 - which they can
+// then freely switch away from via teamPickRow, up to the 8-per-team cap dmTeamOk checks.
+function dmTeamCount(t){ let n=0; for(const p of G.net.players.values()) if(p.team===t) n++; return n; }
+function dmAssignTeam(){ return dmTeamCount(0)<=dmTeamCount(1)?0:1; }
+function dmTeamOk(p,t){ return p.team===t||dmTeamCount(t)<DM_TEAM_SIZE; }
 function broadcastRoster(){
-  const list=[...G.net.players.values()].map(p=>({id:p.id,name:p.name,ready:p.ready,host:p.host}));
-  broadcastAll({type:'roster',players:list,total:G.net.total});
+  const list=[...G.net.players.values()].map(p=>({id:p.id,name:p.name,ready:p.ready,host:p.host,team:p.team}));
+  broadcastAll({type:'roster',players:list,total:G.net.total,dm:!!G.net.dm});
   renderLobby();
 }
 function renderLobby(){
   if(G.net.mode==='off')return;
   const players=[...G.net.players.values()];
-  const rows=players.map(p=>`<div class="rpRow${p.ready?' ready':''}${p.host?' host':''}"><i class="dot"></i><span class="nm">${esc(p.name)}</span>${p.host?'<span class="tag">방장</span>':''}</div>`).join('')||'<div class="note">아직 아무도 없습니다.</div>';
+  const dm=!!G.net.dm;
+  $('teamPickRow').hidden=!dm;
+  const rows=players.map(p=>{
+    const teamCls=dm&&typeof p.team==='number'?' team'+p.team:'';
+    const teamTag=dm&&typeof p.team==='number'?`<span class="tag team${p.team}">${p.team===0?'블루':'레드'}</span>`:'';
+    return `<div class="rpRow${p.ready?' ready':''}${p.host?' host':''}${teamCls}"><i class="dot"></i><span class="nm">${esc(p.name)}</span>${teamTag}${p.host?'<span class="tag">방장</span>':''}</div>`;
+  }).join('')||'<div class="note">아직 아무도 없습니다.</div>';
   $('roomPlayers').innerHTML=rows;
-  const total=G.net.total||20,human=players.length,bots=Math.max(0,total-human);
+  const total=dm?DM_TEAM_SIZE*2:(G.net.total||20),human=players.length,bots=Math.max(0,total-human);
   $('mpTotalOut').textContent=total+'명';
-  $('mpFillMsg').textContent=`사람 ${human}명 + 봇 ${bots}명 = 총 ${total}명`;
+  $('mpFillMsg').textContent=dm?`블루 ${dmTeamCount(0)}명 · 레드 ${dmTeamCount(1)}명 (팀당 최대 ${DM_TEAM_SIZE}, 나머지는 봇)`:`사람 ${human}명 + 봇 ${bots}명 = 총 ${total}명`;
+  const myId=G.net.mode==='host'?'host':G.net.myId,me=G.net.players.get(myId);
+  $('mpTeam0Btn').classList.toggle('active',!!me&&me.team===0);
+  $('mpTeam1Btn').classList.toggle('active',!!me&&me.team===1);
+  $('mpTeam0Btn').disabled=!!me&&!dmTeamOk(me,0);
+  $('mpTeam1Btn').disabled=!!me&&!dmTeamOk(me,1);
   if(G.net.mode==='host'){
     const allReady=players.filter(p=>!p.host).every(p=>p.ready);
     const over=human>total;
@@ -4431,7 +4477,23 @@ $('mpDM').addEventListener('change',()=>{
   G.net.dm=$('mpDM').checked;
   $('totalRow').hidden=G.net.dm;
   G.net.total=G.net.dm?DM_TEAM_SIZE*2:+$('mpTotal').value;
+  // flipping into DM needs everyone already in the room (host included) to actually have a team,
+  // not just newcomers from here on - dmAssignTeam balance-fills anyone still unset
+  if(G.net.dm) for(const p of G.net.players.values()) if(typeof p.team!=='number') p.team=dmAssignTeam();
   broadcastRoster();
+});
+function hostPickTeam(t){
+  if(!G.net.dm)return;
+  const me=G.net.players.get('host'); if(!me||!dmTeamOk(me,t))return;
+  me.team=t; broadcastRoster();
+}
+$('mpTeam0Btn').addEventListener('click',()=>{
+  if(G.net.mode==='host')hostPickTeam(0);
+  else if(G.net.mode==='client')sendToHost({type:'team',team:0});
+});
+$('mpTeam1Btn').addEventListener('click',()=>{
+  if(G.net.mode==='host')hostPickTeam(1);
+  else if(G.net.mode==='client')sendToHost({type:'team',team:1});
 });
 $('mpReadyBtn').addEventListener('click',()=>{
   if(G.net.mode!=='client')return;
@@ -4467,10 +4529,14 @@ $('mpCode').addEventListener('keydown',e=>{ if(e.key==='Enter') joinRoom(); });
 function onHostMessage(conn,msg){
   if(!msg||typeof msg!=='object')return;
   if(msg.type==='join'){
-    G.net.players.set(conn.peer,{id:conn.peer,name:(msg.name||'Player').slice(0,12),ready:false,host:false,conn});
+    G.net.players.set(conn.peer,{id:conn.peer,name:(msg.name||'Player').slice(0,12),ready:false,host:false,conn,team:G.net.dm?dmAssignTeam():undefined});
     broadcastRoster();
   } else if(msg.type==='ready'){
     const p=G.net.players.get(conn.peer); if(p){p.ready=!!msg.ready;broadcastRoster();}
+  } else if(msg.type==='team'){
+    if(!G.net.dm)return;
+    const p=G.net.players.get(conn.peer),t=msg.team===1?1:0;
+    if(p&&dmTeamOk(p,t)){p.team=t;broadcastRoster();}
   } else if(msg.type==='input'){
     if(!G.net.started)return;
     const a=actors.find(o=>o.id===conn.peer); if(!a)return;
@@ -4491,7 +4557,11 @@ function onHostMessage(conn,msg){
 function onClientMessage(msg){
   if(!msg||typeof msg!=='object')return;
   if(msg.type==='roster'){
-    G.net.players=new Map(msg.players.map(p=>[p.id,p]));G.net.total=msg.total;renderLobby();
+    G.net.players=new Map(msg.players.map(p=>[p.id,p]));G.net.total=msg.total;
+    // the DM checkbox itself stays host-only (see the 'change' listener's mode guard), but a client
+    // still needs to know whether it's on - that's what decides whether teamPickRow/team tags show
+    G.net.dm=!!msg.dm;$('mpDM').checked=G.net.dm;
+    renderLobby();
   } else if(msg.type==='start'){
     G.net.started=true;
     if(msg.dm) netJoinMatchDM(msg); else netJoinMatch(msg);
@@ -4521,13 +4591,13 @@ function onClientMessage(msg){
 }
 // ---------- host: match start & runtime broadcasting ----------
 function hostStartMatch(){
-  const humans=[...G.net.players.values()].filter(p=>p.id!=='host').map(p=>({id:p.id,name:p.name}));
+  const humans=[...G.net.players.values()].filter(p=>p.id!=='host').map(p=>({id:p.id,name:p.name,team:p.team}));
   const dm=!!G.net.dm,total=dm?DM_TEAM_SIZE*2:G.net.total;
   if(!dm&&humans.length+1>total){netRoomMsg('총 인원이 접속한 사람 수보다 적습니다.');return;}
-  if(dm&&humans.length+1>10){netRoomMsg('데스매치는 최대 10명(5vs5)까지입니다.');return;}
+  if(dm&&humans.length+1>DM_TEAM_SIZE*2){netRoomMsg(`데스매치는 최대 ${DM_TEAM_SIZE*2}명(${DM_TEAM_SIZE}v${DM_TEAM_SIZE})까지입니다.`);return;}
   G.net.started=true;
   G.net.suppressLootDiff=true;
-  if(dm) newGameDM({myId:'host',myName:G.net.myName,humans});
+  if(dm) newGameDM({myId:'host',myName:G.net.myName,myTeam:G.net.players.get('host').team,humans});
   else newGame({myId:'host',myName:G.net.myName,humans,total});
   G.net.suppressLootDiff=false;G.net.diffTake=[];G.net.diffDrop=[];
   if(dm){

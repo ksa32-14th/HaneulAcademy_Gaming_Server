@@ -205,6 +205,8 @@ button.go.small{padding:9px 18px;font-size:13px;letter-spacing:.08em}
 .mapBtn.active{background:rgba(185,154,110,.22);color:#fff}
 .mapBtn.neon{border-color:rgba(255,45,149,.5)}
 .mapBtn.neon.active{background:rgba(255,45,149,.22);color:#fff}
+.modeBtn{border-color:rgba(242,179,61,.5)}
+.modeBtn.active{background:rgba(242,179,61,.22);color:#fff}
 #totalRow{flex-direction:row;align-items:center;flex-wrap:wrap;gap:10px 12px}
 #totalRow input{flex:1;min-width:120px;accent-color:var(--amber);pointer-events:auto}
 #mpFillMsg{margin-top:-6px}
@@ -426,15 +428,31 @@ body.touch #minimap{pointer-events:auto;cursor:pointer;position:relative;z-index
         <label for="sensAim1">조준 감도</label><input type="range" id="sensAim1" data-sens="aim" min="0.2" max="3" step="0.05" value="1"><output data-out="aim">1.00</output>
       </div>
       <label class="toggleRow"><input type="checkbox" data-touch-toggle>터치 컨트롤 (모바일)</label>
-      <div class="btnRow" id="soloMapPickRow">
-        <button id="soloMapWasteBtn" class="go alt small mapBtn active" type="button">황무지</button>
-        <button id="soloMapNeonBtn" class="go alt small mapBtn neon" type="button">네온 골목</button>
-      </div>
       <div class="btnRow">
-        <button id="dmBtn" class="go" type="button">데스매치 출격</button>
-        <button id="startBtn" class="go alt" type="button">배틀로얄</button>
+        <button id="deployOpenBtn" class="go" type="button">출격 준비</button>
         <button id="mpOpenBtn" class="go alt" type="button">함께 플레이</button>
       </div>
+    </div>
+  </div>
+
+  <div id="deployScreen" class="screen" hidden>
+    <div class="menuIn lobbyCard panel">
+      <div class="eyebrow">출격 준비</div>
+      <h2 class="lobbyH">모드와 맵을 선택하세요</h2>
+      <div class="fld">모드
+        <div class="btnRow" id="modePickRow">
+          <button id="modeBRBtn" class="go alt small modeBtn active" type="button">배틀로얄</button>
+          <button id="modeDMBtn" class="go alt small modeBtn" type="button">데스매치</button>
+        </div>
+      </div>
+      <div class="fld" id="deployMapRow" hidden>맵
+        <div class="btnRow">
+          <button id="soloMapWasteBtn" class="go alt small mapBtn active" type="button">황무지</button>
+          <button id="soloMapNeonBtn" class="go alt small mapBtn neon" type="button">네온 골목</button>
+        </div>
+      </div>
+      <button id="deployBtn" class="go" type="button">출격</button>
+      <button id="deployBackBtn" class="linkBtn" type="button">← 메뉴로</button>
     </div>
   </div>
 
@@ -4621,13 +4639,23 @@ document.querySelectorAll('[data-sens]').forEach(el=>el.addEventListener('input'
   try{localStorage.setItem('lc-sens',JSON.stringify(G.sens));}catch(e){}
 }));
 syncSens();
-$('startBtn').addEventListener('click',start);
-$('dmBtn').addEventListener('click',startDM);
-// solo/practice map pick (separate from the co-op lobby's own host-only picker) - just a menu-side
-// preference read by newGameDM() when it's called with no netCfg at all
-G.dmMapSel='waste';
-$('soloMapWasteBtn').addEventListener('click',()=>{G.dmMapSel='waste';$('soloMapWasteBtn').classList.add('active');$('soloMapNeonBtn').classList.remove('active');});
-$('soloMapNeonBtn').addEventListener('click',()=>{G.dmMapSel='neon';$('soloMapNeonBtn').classList.add('active');$('soloMapWasteBtn').classList.remove('active');});
+// deploy screen: mode + (for DM) map, picked here instead of two separate instant-launch buttons -
+// deployBtn is the one thing that actually starts a match, same start()/startDM() as before underneath.
+G.deployMode='br';G.dmMapSel='waste';
+function syncDeployUI(){
+  $('modeBRBtn').classList.toggle('active',G.deployMode==='br');
+  $('modeDMBtn').classList.toggle('active',G.deployMode==='dm');
+  $('deployMapRow').hidden=G.deployMode!=='dm';
+  $('soloMapWasteBtn').classList.toggle('active',G.dmMapSel==='waste');
+  $('soloMapNeonBtn').classList.toggle('active',G.dmMapSel==='neon');
+}
+$('deployOpenBtn').addEventListener('click',()=>{ $('menu').hidden=true;$('deployScreen').hidden=false;syncDeployUI(); });
+$('deployBackBtn').addEventListener('click',()=>{ $('deployScreen').hidden=true;$('menu').hidden=false; });
+$('modeBRBtn').addEventListener('click',()=>{G.deployMode='br';syncDeployUI();});
+$('modeDMBtn').addEventListener('click',()=>{G.deployMode='dm';syncDeployUI();});
+$('soloMapWasteBtn').addEventListener('click',()=>{G.dmMapSel='waste';syncDeployUI();});
+$('soloMapNeonBtn').addEventListener('click',()=>{G.dmMapSel='neon';syncDeployUI();});
+$('deployBtn').addEventListener('click',()=>{ $('deployScreen').hidden=true; if(G.deployMode==='dm') startDM(); else start(); });
 $('againBtn').addEventListener('click',exitToMenu);
 $('pauseMenuBtn').addEventListener('click',exitToMenu);
 $('resumeBtn').addEventListener('click',()=>{

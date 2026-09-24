@@ -38,6 +38,8 @@ body{margin:0;background:var(--ink);color:var(--text);font-family:var(--body);ov
 .kf em{font-style:normal;color:var(--muted);font-family:var(--disp);font-size:11px;margin:0 7px}
 .kf .me{color:var(--amber);font-weight:700}
 .kf .hs{color:var(--red);font-family:var(--disp);font-size:10px;margin-left:5px}
+.kf.enemyDied{background:rgba(79,140,255,.32)}
+.kf.allyDied{background:rgba(255,75,62,.32)}
 
 #cross{position:absolute;left:50%;top:50%;width:0;height:0}
 #cross i{position:absolute;background:rgba(255,255,255,.92);box-shadow:0 0 2px rgba(0,0,0,.8);border-radius:2px}
@@ -1327,11 +1329,14 @@ function buildDeathmatchMap(){
     let x=-36;
     while(x<36){
       // skip the basin->plateau ramp, padded by the widest footprint anything here can have (an 8m
-      // building, half-width 4) - the old check only skipped a CENTRE landing inside the ramp, but a
-      // building placed just outside it could still overhang into the slope with its far edge, which
-      // is exactly the "sinking/floating" look reported (its height is sampled once at the centre, so
-      // an overhanging edge sits at the wrong height for the real, sloped ground under it there)
-      if(Math.abs(x)>=DM_SLOPE1[0]-4&&Math.abs(x)<=DM_SLOPE1[1]+4){x+=sr(6,9);continue;}
+      // building, half-width 4) PLUS the placement jitter its centre still gets below (+-0.6) - the
+      // half-width-only padding still let a building's far edge land up to 0.6 into the ramp itself
+      // on an unlucky roll. Any object whose flat base gets sampled outside the ramp but whose
+      // footprint actually overhangs it sits floating above the real sloped ground underneath that
+      // overhang - exactly the "character falls through the ground" spot reported, concentrated
+      // right at this transition (mostly here on the hill side; the lighter basin-only pass below has
+      // the same problem on a smaller scale, fixed there too).
+      if(Math.abs(x)>=DM_SLOPE1[0]-4.6&&Math.abs(x)<=DM_SLOPE1[1]+4.6){x+=sr(6,9);continue;}
       const roll=srand();
       // the old fixed sr(6,9) step didn't know how wide what it just placed was, so a wide building
       // (up to 8m) could land right up against the next prop with barely a gap - track the actual
@@ -1359,8 +1364,11 @@ function buildDeathmatchMap(){
   // Kept light on purpose - just 2 rows, lower placement odds, wider spacing - this basin still
   // needs to read as open ground to fight across, not a third village.
   for(const rz of [-14,14]){
-    let x=-18;
-    while(x<18){
+    // kept a couple of units further off the ramp than the old +-18 (this pass's own widest object,
+    // a 6m building, plus its +-0.6 placement jitter reached up to 21.6 - past DM_SLOPE1[0]=21, the
+    // same flat-base-over-sloped-ground overhang as the main loop above, just smaller and rarer)
+    let x=-17;
+    while(x<17){
       const roll=srand();
       let halfW=2;
       if(roll<0.28){
@@ -1375,6 +1383,16 @@ function buildDeathmatchMap(){
       }
       x+=halfW+sr(5,8);
     }
+  }
+  // the village loop above tops out at x 36 (its own hard stop, well short of DM_HALF_X) and the
+  // bunker doesn't start until 42 - on the minimap that whole stretch of each team's own hillside
+  // read as flat empty ground with nothing but the firing line on it, a noticeably thinner approach
+  // than the dense village in the middle. One small piece of cover per side, tucked off the direct
+  // lane so it doesn't crowd the forward sandbag piles already sitting further out in this same gap.
+  for(const side of [-1,1]){
+    const cx=DM_OX+side*(36.5+sr(0,2)),cz=DM_OZ+(srand()<0.5?-1:1)*20+sr(-2,2);
+    if(srand()<0.75) container(cx,cz,Math.floor(srand()*2),dmGroundY(cx));
+    else sandbagRun('x',cz,cx-1.8,cx+1.8,null,dmGroundY(cx));
   }
   // sandbag firing line facing into the village just outside each team's bunker - the last line of
   // defense before your own spawn, mirroring a real outpost's perimeter
@@ -2507,7 +2525,12 @@ function dmPickAirstrikePts(){
     const pool=alive.filter(a=>(a.pos.x-DM_OX)*side>=-6);   // a little past centre, so a fight straddling the middle still counts for both sides
     for(let i=0;i<n;i++){
       let x,z;
-      if(pool.length){
+      // most fights happen to cluster in the open basin (it's the lane between the two villages),
+      // so anchoring every bomb tight around a live actor kept landing the whole strike right in the
+      // middle - only about a third of bombs now do that; the rest spread across the full plateau
+      // reach too (including the village/hillside terrain out past the basin), so a strike actually
+      // threatens the high ground, not just whoever's slugging it out in the basin at that moment
+      if(pool.length&&Math.random()<0.35){
         const a=pick(pool);
         x=clamp(a.pos.x+rnd(-9,9),DM_OX+side*10,DM_OX+side*(DM_HALF_X-4));
         z=clamp(a.pos.z+rnd(-9,9),DM_OZ-DM_HALF_Z+8,DM_OZ+DM_HALF_Z-8);
@@ -3729,6 +3752,10 @@ function damageDir(att){
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 function feed(k,v,w,head){
   const el=document.createElement('div');el.className='kf';
+  // deathmatch only (v.team is null outside it): tint the whole pill by whose side the victim was
+  // on, so a glance at colour alone says "good for me" or "bad for me" without reading names -
+  // blue when an enemy went down, red when it was one of ours.
+  if(G.dm&&player&&typeof v.team==='number')el.classList.add(v.team===player.team?'allyDied':'enemyDied');
   const nm=a=>`<span class="${a&&a.isPlayer?'me':''}">${esc(a?a.name:'')}</span>`;
   el.innerHTML=k?`${nm(k)}<em>${esc(w)}</em>${nm(v)}${head?'<span class="hs">HS</span>':''}`:`${nm(v)}<em>${esc(w||'블루존')}</em>`;
   const f=$('feed');f.prepend(el);while(f.children.length>6)f.lastChild.remove();

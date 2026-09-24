@@ -201,6 +201,10 @@ button.go.small{padding:9px 18px;font-size:13px;letter-spacing:.08em}
 .teamBtn.team1{border-color:rgba(255,75,62,.5)}
 .teamBtn.active.team0{background:rgba(79,140,255,.22);color:#fff}
 .teamBtn.active.team1{background:rgba(255,75,62,.22);color:#fff}
+.mapBtn{border-color:rgba(185,154,110,.5)}
+.mapBtn.active{background:rgba(185,154,110,.22);color:#fff}
+.mapBtn.neon{border-color:rgba(255,45,149,.5)}
+.mapBtn.neon.active{background:rgba(255,45,149,.22);color:#fff}
 #totalRow{flex-direction:row;align-items:center;flex-wrap:wrap;gap:10px 12px}
 #totalRow input{flex:1;min-width:120px;accent-color:var(--amber);pointer-events:auto}
 #mpFillMsg{margin-top:-6px}
@@ -422,6 +426,10 @@ body.touch #minimap{pointer-events:auto;cursor:pointer;position:relative;z-index
         <label for="sensAim1">조준 감도</label><input type="range" id="sensAim1" data-sens="aim" min="0.2" max="3" step="0.05" value="1"><output data-out="aim">1.00</output>
       </div>
       <label class="toggleRow"><input type="checkbox" data-touch-toggle>터치 컨트롤 (모바일)</label>
+      <div class="btnRow" id="soloMapPickRow">
+        <button id="soloMapWasteBtn" class="go alt small mapBtn active" type="button">황무지</button>
+        <button id="soloMapNeonBtn" class="go alt small mapBtn neon" type="button">네온 골목</button>
+      </div>
       <div class="btnRow">
         <button id="dmBtn" class="go" type="button">데스매치 출격</button>
         <button id="startBtn" class="go alt" type="button">배틀로얄</button>
@@ -453,6 +461,10 @@ body.touch #minimap{pointer-events:auto;cursor:pointer;position:relative;z-index
         <button id="mpCopyLinkBtn" class="go alt small" type="button">초대 링크 복사</button>
       </div>
       <p class="note" id="mpCopyMsg">코드나 링크를 친구에게 보내면 바로 함께할 수 있습니다.</p>
+      <div class="btnRow" id="mapPickRow" hidden>
+        <button id="mpMapWasteBtn" class="go alt small mapBtn" type="button">황무지</button>
+        <button id="mpMapNeonBtn" class="go alt small mapBtn neon" type="button">네온 골목</button>
+      </div>
       <div class="btnRow" id="teamPickRow" hidden>
         <button id="mpTeam0Btn" class="go alt small teamBtn team0" type="button">블루팀</button>
         <button id="mpTeam1Btn" class="go alt small teamBtn team1" type="button">레드팀</button>
@@ -563,6 +575,24 @@ function P(g,c,x,y,z,rx){const m=M(g,c,x,y,z);if(rx)m.rotation.x=rx;return m;}
 // first, not license to stand any further out than this.
 const DM_OX=6000,DM_OZ=0,DM_HALF_X=60,DM_HALF_Z=42,DM_GROUND=0;
 function inDM(x,z){return Math.abs(x-DM_OX)<DM_HALF_X&&Math.abs(z-DM_OZ)<DM_HALF_Z;}
+// second DM arena: "네온 골목" (neon alley), a narrow cyberpunk street canyon - lives at its own huge
+// offset (off the BR island's circle and well clear of the original arena's own mountain ring, which
+// reaches to roughly +-83 around DM_OX/DM_OZ) so both maps can be built once at load, same as the
+// original, and a match just teleports actors into whichever one was picked (see G.dmMap). Much
+// narrower than the original (17 vs 42 half-width) and flat (no ramp) - a paved alley, not terrain.
+const NEON_OX=0,NEON_OZ=6000,NEON_HALF_X=34,NEON_HALF_Z=17,NEON_GROUND=0;
+function inNeon(x,z){return Math.abs(x-NEON_OX)<NEON_HALF_X&&Math.abs(z-NEON_OZ)<NEON_HALF_Z;}
+// runtime accessors: every DM system that used to reference DM_OX/DM_HALF_X etc directly now goes
+// through these so the same code works for whichever arena the current match actually picked -
+// G.dmMap is set once per match (newGameDM/netJoinMatchDM) and never changes mid-match.
+function curOX(){return G.dmMap==='neon'?NEON_OX:DM_OX;}
+function curOZ(){return G.dmMap==='neon'?NEON_OZ:DM_OZ;}
+function curHX(){return G.dmMap==='neon'?NEON_HALF_X:DM_HALF_X;}
+function curHZ(){return G.dmMap==='neon'?NEON_HALF_Z:DM_HALF_Z;}
+function curGroundY(x){return G.dmMap==='neon'?NEON_GROUND:dmGroundY(x);}
+function curSpawn(){return G.dmMap==='neon'?NEON_SPAWN:DM_SPAWN;}
+function curMGs(){return G.dmMap==='neon'?NEON_MGS:DM_MGS;}
+function curProps(){return G.dmMap==='neon'?NEON_PROPS:DM_PROPS;}
 // elevation profile along the long axis: a flat basin down the middle (original size, with its own
 // buildings/sandbags) and each village sitting up on a flat plateau - height only depends on
 // distance from centre (uniform across Z), like a simple cross-section. There's no separate hill
@@ -624,6 +654,7 @@ for(let i=0,tries=0;i<28&&tries<900;tries++){
 TOWNS.forEach(t=>t.h=Math.max(1.6,rawHeight(t.x,t.z)));
 function heightAt(x,z){
   if(inDM(x,z)) return dmGroundY(x);   // deathmatch arena: basin-to-hills profile, far from the BR island
+  if(inNeon(x,z)) return NEON_GROUND;  // neon alley arena: flat paved street, no ramp
   let h=rawHeight(x,z);
   for(const t of TOWNS){const dx=x-t.x,dz=z-t.z;const R=t.r+25;if(dx*dx+dz*dz<R*R){h=lerp(h,t.h,smooth(R,t.r,Math.sqrt(dx*dx+dz*dz)));}}
   return h;
@@ -1169,9 +1200,11 @@ LOOT_SPOTS.forEach(s=>{if(s.y===null)s.y=heightAt(s.x,s.z);});
 // huge offset - see DM_OX/inDM above. Uses srand()/sr() exclusively (never Math.random()) so every
 // peer in a networked match generates the exact same layout.
 let DM_SPAWN=null,DM_BUNKERS=null,DM_MGS=null;
+let NEON_SPAWN=null,NEON_MGS=null;
 // lightweight footprints for the DM minimap/bigmap (BLD already covers building()'s houses/sheds,
 // but containers and sandbag runs never go through building() - collect their own markers)
 const DM_PROPS=[];
+const NEON_PROPS=[]; // same idea, for the neon alley map (see curProps())
 // shipping container: a plain rust/olive/steel box, the size of a real 20ft container - reads at a
 // glance as "military outpost", not "village house"
 const CONTAINER_COLS=[0xa0522d,0x5f6b4a,0x8a3a3a,0x5a6470,0x707a3a,0x6b6f5a];
@@ -1537,6 +1570,238 @@ function buildDeathmatchMap(){
     {team:1,base:DM_BUNKERS[1],front:frontSpawns(BASE_DX,-1)},
   ];
 }
+// ---------- neon alley deathmatch arena: a narrow cyberpunk back-street ("네온 골목") - the second DM
+// map, selectable in the lobby (see G.dmMap/curOX() etc). The boundary here is tall building facades
+// instead of a mountain ring - "the city itself is the wall" - and the whole footprint is much
+// narrower than the original (NEON_HALF_Z=17 vs DM_HALF_Z=42) so fights stay close and vertical: a
+// couple of mid-rise interior blocks give real rooftop routes (climbable exterior stairs + a rooftop
+// catwalk linking two of them across the lane), on top of the usual rooftop MG per team.
+const NEON_FACADE_COLS=[0x24262b,0x2c2f36,0x1c1e23,0x333842,0x2a2d33];
+const NEON_SIGN_COLS=[0xff2d95,0x29e0ff,0xb537f2,0xff5b3d,0x39ff8f,0xffd23d];
+const NEON_TEAM_COL_MAP=[0x2f5fa8,0xa8342f]; // same values as DM_TEAM_COL, duplicated here since that
+                                              // const isn't defined yet at this point in the file
+// unlit sign/glow mesh - MeshBasicMaterial so it reads bright regardless of the shared scene sun,
+// added straight to the scene (not through addBox/DRAW - it's cosmetic, never collides)
+function neonSign(x,y,z,w,h,rotY,color){
+  const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,0.1),new THREE.MeshBasicMaterial({color}));
+  m.position.set(x,y,z);m.rotation.y=rotY;scene.add(m);return m;
+}
+function neonGlow(x,y,z,color,intensity,range){
+  const l=new THREE.PointLight(color,intensity,range,2);l.position.set(x,y,z);scene.add(l);
+}
+function neonCrate(cx,cz){
+  const s=1.05,n=2+Math.floor(srand()*2);
+  for(let i=0;i<n;i++){
+    const jx=sr(-0.35,0.35),jz=sr(-0.35,0.35),c=[0x6b5a3a,0x4a5a3a,0x5a4a3a,0x3a4a5a][Math.floor(srand()*4)];
+    addBox(cx-s/2+jx,i*s,cz-s/2+jz,cx+s/2+jx,(i+1)*s,cz+s/2+jz,c);
+  }
+  NEON_PROPS.push({x0:cx-s,x1:cx+s,z0:cz-s,z1:cz+s,type:'sandbag'});
+}
+function neonDumpster(cx,cz,rot){
+  const w=1.4,l=2.2,h=1.25,e=emitter(cx,cz,rot||0);
+  e.box(-l/2,0,-w/2,l/2,h,w/2,0x39472e);
+  e.box(-l/2-0.05,h,-w/2-0.05,l/2+0.05,h+0.12,w/2+0.05,0x2c3624);
+  NEON_PROPS.push({x0:cx-l/2,x1:cx+l/2,z0:cz-w/2,z1:cz+w/2,type:'container'});
+}
+// a flat-roofed block with an optional exterior staircase up one face (same climbable-step technique
+// as the MG bunker stairs below - each step's rise stays under the ~0.4 auto-step threshold so it's
+// walkable, not a jump-only climb). side is 'zMin'/'zMax'/'xMin'/'xMax' - which face the stair climbs,
+// named by which edge it starts from rather than a compass direction to keep the two axes unambiguous.
+function neonBlock(lx,lz,w,d,h,side){
+  const cx=NEON_OX+lx,cz=NEON_OZ+lz;
+  const x0=cx-w/2,x1=cx+w/2,z0=cz-d/2,z1=cz+d/2,y0=NEON_GROUND,y1=NEON_GROUND+h;
+  addBox(x0,y0,z0,x1,y1,z1,NEON_FACADE_COLS[Math.floor(srand()*NEON_FACADE_COLS.length)]);
+  const roofY=y1+0.3;
+  addBox(x0-0.3,y1,z0-0.3,x1+0.3,roofY,z1+0.3,0x1a1c20);
+  NEON_PROPS.push({x0,x1,z0,z1,type:'building'});
+  let stairBase=null;
+  if(side){
+    const stepN=Math.max(8,Math.ceil(roofY/0.36)),stepRun=0.32,stepRise=roofY/stepN;
+    const horiz=side==='zMin'||side==='zMax';
+    const faceFixed=side==='zMin'?z0:side==='zMax'?z1:side==='xMin'?x0:x1;
+    const dir=(side==='zMin'||side==='xMin')?-1:1;
+    const midA=horiz?cx:cz,halfSpan=1.1;
+    for(let i=1;i<=stepN;i++){
+      const a=faceFixed+dir*(i-1)*stepRun,b=faceFixed+dir*i*stepRun,topY=roofY-(i-1)*stepRise;
+      if(horiz) addBox(midA-halfSpan,y0,Math.min(a,b),midA+halfSpan,topY,Math.max(a,b),0x33383f);
+      else addBox(Math.min(a,b),y0,midA-halfSpan,Math.max(a,b),topY,midA+halfSpan,0x33383f);
+    }
+    const far=faceFixed+dir*stepN*stepRun;
+    stairBase=horiz?{x:midA,z:far}:{x:far,z:midA};
+  }
+  return {x0,x1,z0,z1,y0,roofY,cx,cz,stairBase};
+}
+// straight rooftop catwalk between two blocks of the same roof height, south one first - just a thin
+// walkable deck with a low rail on each side, slightly overlapping both roofs for a seamless join
+function neonCatwalk(south,north){
+  const y=Math.min(south.roofY,north.roofY);
+  const x0=Math.max(south.x0,north.x0)+0.3,x1=Math.min(south.x1,north.x1)-0.3;
+  const z0=south.z1-0.4,z1=north.z0+0.4;
+  addBox(x0,y,z0,x1,y+0.22,z1,0x24262b);
+  addBox(x0,y+0.22,z0,x0+0.1,y+0.22+0.8,z1,0x14151a,{collide:false});
+  addBox(x1-0.1,y+0.22,z0,x1,y+0.22+0.8,z1,0x14151a,{collide:false});
+  NEON_PROPS.push({x0,x1,z0,z1,type:'building'});
+}
+function buildNeonAlleyMap(){
+  const BASE_DX=28;
+  // ground: flat dark pavement (no ramp - this arena is paved flat, not terrain), faint wet-asphalt
+  // sheen variation for a bit of visual life
+  {
+    const sx=(NEON_HALF_X+3)*2,sz=(NEON_HALF_Z+3)*2;
+    const g=new THREE.PlaneGeometry(sx,sz,48,24);g.rotateX(-Math.PI/2);
+    const pos=g.attributes.position,cols=new Float32Array(pos.count*3);
+    const base=new THREE.Color(0x2a2a30),dark=new THREE.Color(0x1c1c21),wet=new THREE.Color(0x32424c),c=new THREE.Color();
+    for(let i=0;i<pos.count;i++){
+      const x=pos.getX(i),z=pos.getZ(i);pos.setY(i,0);
+      c.copy(base).lerp(dark,clamp(0.5+0.5*Math.sin(x*0.11)*Math.cos(z*0.14),0,1)*0.6);
+      c.lerp(wet,Math.max(0,Math.sin(x*0.29+1.1)*Math.cos(z*0.24-0.4))*0.16);
+      cols[i*3]=c.r;cols[i*3+1]=c.g;cols[i*3+2]=c.b;
+    }
+    g.setAttribute('color',new THREE.BufferAttribute(cols,3));g.computeVertexNormals();
+    const m=new THREE.Mesh(g,new THREE.MeshLambertMaterial({vertexColors:true}));
+    m.position.set(NEON_OX,NEON_GROUND,NEON_OZ);m.receiveShadow=true;scene.add(m);
+  }
+  // boundary: tall building facades closing off every side, inner face flush with NEON_HALF_X/Z (the
+  // same value resolve()'s clamp uses) instead of a distant ring set back from it - the lesson from
+  // the original arena's own mountain-ring tightening earlier this project: any gap between the
+  // visual boundary and the actual position clamp is exactly where a player ends up "sinking" into
+  // geometry that isn't actually there yet, or standing in open air past everything solid.
+  const sideWall=(sign)=>{
+    const faceZ=NEON_OZ+sign*NEON_HALF_Z;
+    let x=-NEON_HALF_X;
+    while(x<NEON_HALF_X){
+      const w=sr(9,15),h=sr(34,60),d=sr(7,11);
+      const x0=NEON_OX+x,x1=Math.min(NEON_OX+NEON_HALF_X,x0+w);
+      const z0=sign<0?faceZ-d:faceZ,z1=sign<0?faceZ:faceZ+d;
+      addBox(x0,NEON_GROUND,z0,x1,NEON_GROUND+h,z1,NEON_FACADE_COLS[Math.floor(srand()*NEON_FACADE_COLS.length)]);
+      NEON_PROPS.push({x0,x1,z0,z1,type:'building'});
+      if(srand()<0.65){
+        const sw=Math.min((x1-x0)*0.65,4.2),sh=sr(1.3,2.8),sy=NEON_GROUND+sr(3,Math.min(h-4,28));
+        const col=NEON_SIGN_COLS[Math.floor(srand()*NEON_SIGN_COLS.length)];
+        const sz=sign<0?z1+0.08:z0-0.08;
+        neonSign((x0+x1)/2,sy,sz,sw,sh,0,col);
+        if(srand()<0.35) neonGlow((x0+x1)/2,sy,sz-sign*1.6,col,1.0,13);
+      }
+      x+=(x1-x0)+sr(0.3,1.1);
+    }
+  };
+  sideWall(-1);sideWall(1);
+  const endWall=(sign)=>{
+    const faceX=NEON_OX+sign*NEON_HALF_X;
+    let z=-NEON_HALF_Z;
+    while(z<NEON_HALF_Z){
+      const w=sr(8,13),h=sr(30,54),d=sr(7,10);
+      const z0=NEON_OZ+z,z1=Math.min(NEON_OZ+NEON_HALF_Z,z0+w);
+      const x0=sign<0?faceX-d:faceX,x1=sign<0?faceX:faceX+d;
+      addBox(x0,NEON_GROUND,z0,x1,NEON_GROUND+h,z1,NEON_FACADE_COLS[Math.floor(srand()*NEON_FACADE_COLS.length)]);
+      NEON_PROPS.push({x0,x1,z0,z1,type:'building'});
+      z+=(z1-z0)+sr(0.3,1);
+    }
+  };
+  endWall(-1);endWall(1);
+  // team bases: a low sealed alcove (no door - teleported into via dmPlaceAtSpawn only, same as the
+  // original arena's bunkers) recessed against its own end wall, with a rooftop MG reached by an
+  // exterior staircase - near-identical rig to the original, just re-skinned dark/glass over concrete.
+  function neonBase(localX,team){
+    const bx=NEON_OX+localX,bz=NEON_OZ,bw=8,bd=20,bh=5,wt=0.5;
+    const x0=bx-bw/2,x1=bx+bw/2,z0=bz-bd/2,z1=bz+bd/2,y0=NEON_GROUND,y1=NEON_GROUND+bh,col=0x1a1c20,tc=NEON_TEAM_COL_MAP[team];
+    addBox(x0,y0,z0,x1,y1,z0+wt,col);addBox(x0,y0,z1-wt,x1,y1,z1,col);
+    addBox(x0,y0,z0,x0+wt,y1,z1,col);addBox(x1-wt,y0,z0,x1,y1,z1,col);
+    const by0=y0+bh*0.3,by1=y0+bh*0.44;
+    addBox(x0-0.02,by0,z0-0.02,x1+0.02,by1,z0+wt+0.02,tc,{collide:false});
+    addBox(x0-0.02,by0,z1-wt-0.02,x1+0.02,by1,z1+0.02,tc,{collide:false});
+    addBox(x0-0.02,by0,z0-0.02,x0+wt+0.02,by1,z1+0.02,tc,{collide:false});
+    addBox(x1-wt-0.02,by0,z0-0.02,x1+0.02,by1,z1+0.02,tc,{collide:false});
+    NEON_PROPS.push({x0,x1,z0,z1,type:'bunker',team});
+    addBox(x0-0.4,y0-0.3,z0-0.4,x1+0.4,y0,z1+0.4,0x121316);
+    const roofY=y1+0.4;
+    addBox(x0-0.5,y1,z0-0.5,x1+0.5,roofY,z1+0.5,0x24262b);
+    return {x:bx,z:bz,x0,x1,z0,z1,y0,roofY,wt};
+  }
+  const nb0=neonBase(-BASE_DX,0),nb1=neonBase(BASE_DX,1);
+  NEON_MGS=[];
+  for(const side of [-1,1]){
+    const team=side<0?0:1,bk=side<0?nb0:nb1;
+    const x0=bk.x0,x1=bk.x1,z0=bk.z0,z1=bk.z1,y0=bk.y0,y1=bk.roofY,tz=bk.z;
+    const wallGap=0.55,anchor=side<0?x0-wallGap:x1+wallGap;
+    const stepN=13,stepRun=0.3,stepRise=(y1-y0)/stepN,sz0=tz-1.3,sz1=tz+1.3;
+    for(let i=1;i<=stepN;i++){
+      const sa=side<0?anchor-i*stepRun:anchor+(i-1)*stepRun,sb=side<0?anchor-(i-1)*stepRun:anchor+i*stepRun;
+      const topY=y1-(i-1)*stepRise;
+      addBox(Math.min(sa,sb),y0,sz0,Math.max(sa,sb),topY,sz1,0x2c2f36);
+    }
+    const gx=bk.x-side*2.6;
+    sandbagRun('z',gx,tz-2.8,tz-1.1,1.2,y1);
+    sandbagRun('z',gx,tz+1.1,tz+2.8,1.2,y1);
+    const yaw=side<0?-Math.PI/2:Math.PI/2;
+    const base=new THREE.Group(),legCol=0x1c1e22,gunCol=0x1c1f1c,metalCol=0x3a3d38,woodCol=0x333333;
+    base.add(
+      P(gB(.09,1.05,.09),legCol,0,.5,-.5,0.4),
+      P(gB(.09,1.05,.09),legCol,-.45,.5,.35,-0.55),
+      P(gB(.09,1.05,.09),legCol,.45,.5,.35,-0.55),
+      P(gB(.32,.04,.32),legCol,0,.06,0),
+      P(gC(.16,.05),woodCol,0,.62,-.72,1.5708),
+      P(gB(.04,.55,.04),legCol,0,.34,-.72)
+    );
+    const gun=new THREE.Group();
+    gun.add(
+      P(gC(.09,.36),metalCol,0,1.05,0,1.5708),
+      P(gB(.22,.22,1.0),gunCol,0,1.15,.15),
+      P(gC(.08,.5),metalCol,0,1.15,.55),
+      P(gC(.032,.55),gunCol,0,1.15,1.05),
+      P(gC(.05,.09),metalCol,0,1.15,1.32),
+      P(gB(.05,.16,.05),woodCol,-.14,.95,-.32,0.3),
+      P(gB(.05,.16,.05),woodCol,.14,.95,-.32,-0.3),
+      P(gB(.16,.32,.03),metalCol,-.19,1.3,-.02),
+      P(gB(.16,.32,.03),metalCol,.19,1.3,-.02),
+      P(gB(.16,.2,.24),0x33361f,.24,1.05,.05),
+      P(gB(.008,.05,.008),0x1c1f1c,0,1.19,1.3)
+    );
+    base.add(gun);
+    base.position.set(gx,y1,tz);base.rotation.y=yaw+Math.PI;
+    base.traverse(m=>{if(m.isMesh){m.castShadow=true;m.receiveShadow=true;}});
+    scene.add(base);
+    const stairBase={x:side<0?anchor-stepN*stepRun-0.4:anchor+stepN*stepRun+0.4,z:tz};
+    NEON_MGS.push({x:gx,y:y1,z:tz,yaw,team,occupant:null,mag:50,mesh:base,gunMesh:gun,stairBase});
+    neonGlow(bk.x,y1+2,tz,NEON_TEAM_COL_MAP[team],1.1,15);
+  }
+  // interior structures: two mirrored twin-block "gates" (each pair linked by a rooftop catwalk
+  // straight across the lane, stairs facing outward away from their own partner so the ground route
+  // and the climb never physically overlap) plus one taller solo watchtower dead centre - the
+  // vertical routes requested, without needing the boundary itself to be climbable
+  const twinL_s=neonBlock(-12,-5,7,6,8,'zMin'),twinL_n=neonBlock(-12,5,7,6,8,'zMax');
+  neonCatwalk(twinL_s,twinL_n);
+  const twinR_s=neonBlock(12,-5,7,6,8,'zMin'),twinR_n=neonBlock(12,5,7,6,8,'zMax');
+  neonCatwalk(twinR_s,twinR_n);
+  neonBlock(0,0,6,6,11,'zMin');
+  for(const blk of [twinL_s,twinL_n,twinR_s,twinR_n]){
+    neonSign(blk.cx,blk.y0+sr(2,5),blk.z0-0.06,2.6,1.6,0,NEON_SIGN_COLS[Math.floor(srand()*NEON_SIGN_COLS.length)]);
+  }
+  // ground-level clutter for cover in the open flanks between each base, the twin gates and the
+  // centre. Kept clear of both the twin gates (x=+-12, half-width 3.5) and each team's own spawn
+  // scatter (frontSpawns lands at x = base +- 5..8, i.e. roughly x=-23..-20 / 20..23 - a prop sitting
+  // right in that band could spawn a player wedged against it, unable to move on the very first
+  // frame) - x=+-17 sits in the gap between the two with a clear margin on both sides.
+  for(const[lx,lz]of[[-17,10],[-17,-11],[17,-10],[17,11],[-6,-13],[6,13],[-6,13],[6,-13]]){
+    if(srand()<0.5) neonCrate(NEON_OX+lx,NEON_OZ+lz); else neonDumpster(NEON_OX+lx,NEON_OZ+lz,Math.floor(srand()*2));
+  }
+  // a strip of hanging red-lantern markers down both boundary walls - understated East Asian
+  // back-street flavour without needing real geometry, just small glowing spheres on a thin wire
+  for(const sign of [-1,1]){
+    for(let x=-NEON_HALF_X+6;x<NEON_HALF_X-4;x+=sr(9,13)){
+      const lz=NEON_OZ+sign*(NEON_HALF_Z-1.4),ly=NEON_GROUND+sr(3.4,5.5);
+      const wire=new THREE.Mesh(new THREE.CylinderGeometry(0.02,0.02,1.6,4),new THREE.MeshBasicMaterial({color:0x1a1a1a}));
+      wire.position.set(NEON_OX+x,ly+0.8,lz);scene.add(wire);
+      const lant=new THREE.Mesh(new THREE.SphereGeometry(0.22,8,6),new THREE.MeshBasicMaterial({color:0xff3b3b}));
+      lant.position.set(NEON_OX+x,ly,lz);scene.add(lant);
+    }
+  }
+  const frontSpawns=(localX,face)=>{const pts=[];for(let i=0;i<18;i++)pts.push({x:NEON_OX+localX+face*sr(5,8),z:NEON_OZ+sr(-13,13)});return pts;};
+  NEON_SPAWN=[
+    {team:0,base:nb0,front:frontSpawns(-BASE_DX,1)},
+    {team:1,base:nb1,front:frontSpawns(BASE_DX,-1)},
+  ];
+}
 // the BR world's walls/roofs are batched into InstancedMeshes once, right after BR world-gen
 // finishes (see the colorInst() calls above) - anything addBox()/building() adds after that point
 // (every DM wall, mountain pillar and bunker) still lands in DRAW/GABLES but never gets its own
@@ -1545,6 +1810,7 @@ function buildDeathmatchMap(){
 {
   const drawFrom=DRAW.length,gableFrom=GABLES.length;
   buildDeathmatchMap();
+  buildNeonAlleyMap();
   colorInst(new THREE.BoxGeometry(1,1,1),DRAW.slice(drawFrom),it=>{const b=it.b;_p.set((b.minX+b.maxX)/2,(b.minY+b.maxY)/2,(b.minZ+b.maxZ)/2);_s.set(b.maxX-b.minX,b.maxY-b.minY,b.maxZ-b.minZ);_c.setHex(it.color);});
   if(GABLES.length>gableFrom){
     const v=[],A=[-.5,0,-.5],B=[-.5,0,.5],C=[-.5,1,0],A2=[.5,0,-.5],B2=[.5,0,.5],C2=[.5,1,0];
@@ -1860,6 +2126,7 @@ const NAMES=['Viper','MoonHunter','GhostK','Tiger_77','BrownBear','Ranger','Nova
 const SHIRTS=[0x9b3b35,0x2f5d8a,0x6d7d3a,0x8a6b3d,0x444a52,0x7b4a8a,0x2d7a6e,0xb0752e,0x5a5a5a,0x873a5b,0xd8d2c2];
 let actors=[], player=null, plane=null;
 const G={state:'menu',paused:false,time:0,ads:false,scoped:false,fp:true,scopeToggle:false,lookX:0,lookY:0,noLock:false,locked:false,everLocked:false,dmgDealt:0,bigmap:false,deathCause:'',hurt:0,dm:false,
+  dmMap:'waste', // which DM arena the current match uses: 'waste' (original) or 'neon' (네온 골목) - see curOX() etc above
   net:{mode:'off'}}; // net.mode: 'off' (solo) | 'host' | 'client' — see the networking module near the end of the file
 const pick=a=>a[Math.floor(Math.random()*a.length)];
 // per-stance heights (m above feet / body centre when prone)
@@ -2156,12 +2423,12 @@ function chuteSound(){if(!AC)return;const b=spatial(null,0.1),t=AC.currentTime;n
 function blip(freq,len,vol,type){
   if(!AC) return;const t=AC.currentTime,o=AC.createOscillator(),g=AC.createGain();o.type=type||'square';o.frequency.value=freq;g.gain.setValueAtTime(vol||0.05,t);g.gain.exponentialRampToValueAtTime(0.0008,t+len);o.connect(g);g.connect(master||AC.destination);o.start(t);o.stop(t+len+0.02);
 }
-function startHum(){
-  if(!AC||planeHum) return;
-  const o=AC.createOscillator(),o2=AC.createOscillator(),f=AC.createBiquadFilter(),g=AC.createGain();
-  o.type='sawtooth';o.frequency.value=58;o2.type='sawtooth';o2.frequency.value=61;f.type='lowpass';f.frequency.value=260;g.gain.value=0.06;
-  o.connect(f);o2.connect(f);f.connect(g);g.connect(AC.destination);o.start();o2.start();planeHum={o,o2,g};
-}
+// used to run a constant low sawtooth drone (two detuned oscillators through a lowpass) under every
+// match from start to finish - meant to read as background engine/tension ambience but in practice
+// was just an audible "우우우우웅" hum the whole time. Disabled per feedback; left as a no-op (instead
+// of deleting it and every startHum()/stopHum() call site) so the plumbing stays in place if a lighter
+// touch of ambience is wanted later.
+function startHum(){}
 function stopHum(){if(planeHum){const t=AC.currentTime;planeHum.g.gain.setTargetAtTime(0,t,0.4);const h=planeHum;setTimeout(()=>{try{h.o.stop();h.o2.stop();}catch(e){}},1500);planeHum=null;}}
 
 // ---------- inventory actions
@@ -2388,14 +2655,14 @@ function renderDmScore(){
   $('dmScoreT0').innerHTML=rows(0);
   $('dmScoreT1').innerHTML=rows(1);
 }
-function dmSpawnPos(team){ return pick(DM_SPAWN[team].front); }
+function dmSpawnPos(team){ return pick(curSpawn()[team].front); }
 function dmPlaceAtSpawn(a){
   const p=dmSpawnPos(a.team);
   // yaw sign: forward = (-sin(yaw),0,-cos(yaw)) (see movement code) - team0's bunker sits on the
   // negative-x side and needs to face +x (into the arena, toward team1), which is yaw=-PI/2, not
   // +PI/2 (that pointed -x, back into their own mountain wall - everyone was spawning facing away
   // from the fight, most noticeable once the MG mount locked the view to this same wrong direction)
-  a.pos.set(p.x,dmGroundY(p.x)+0.1,p.z);a.yaw=a.team===0?-Math.PI/2:Math.PI/2;a.pitch=0;
+  a.pos.set(p.x,curGroundY(p.x)+0.1,p.z);a.yaw=a.team===0?-Math.PI/2:Math.PI/2;a.pitch=0;
   a.state='ground';a.onGround=true;a.vy=0;a.stance='stand';a.alive=true;a.hp=100;a.deadT=0;
   dmEquip(a);
   if(!a.isPlayer&&a.brain){a.brain.target=null;a.brain.path=[];a.brain.mode='none';}
@@ -2602,6 +2869,10 @@ function dmPlayAirstrike(pts){
   pts.forEach((p,i)=>dropBomb(p.x,p.z,dmGroundY(p.x),1.2+i*0.16,()=>dmExplodeAt(p,doDamage)));
 }
 function dmCheckAirstrike(){
+  // airstrikes are a waste-map-only set piece - dmPickAirstrikePts/dmExplodeAt both reason in terms
+  // of the original arena's DM_OX/DM_HALF_X, and dropping bombs into a narrow building-lined alley
+  // doesn't read right anyway (nothing overhead for them to fall past)
+  if(G.dmMap==='neon') return;
   const tier=Math.floor(Math.max(DM.score[0],DM.score[1])/10);
   if(tier<=DM.airstrikeTier||tier<1) return;
   DM.airstrikeTier=tier;
@@ -2782,8 +3053,8 @@ function resolve(a){
     // into solid rock with nothing left to resolve them back out - "sinking into the ground". Clamped
     // to DM_HALF_X/Z exactly instead: it can never place anyone anywhere collision hasn't already
     // cleared, on any seed.
-    a.pos.x=clamp(a.pos.x,DM_OX-DM_HALF_X,DM_OX+DM_HALF_X);
-    a.pos.z=clamp(a.pos.z,DM_OZ-DM_HALF_Z,DM_OZ+DM_HALF_Z);
+    a.pos.x=clamp(a.pos.x,curOX()-curHX(),curOX()+curHX());
+    a.pos.z=clamp(a.pos.z,curOZ()-curHZ(),curOZ()+curHZ());
   } else {
     const r=Math.hypot(a.pos.x,a.pos.z);if(r>430){a.pos.x*=430/r;a.pos.z*=430/r;}
   }
@@ -3053,7 +3324,7 @@ function updatePlayer(dt){
     G.nearMG=null;
     if(!p.mg){
       let best=null,bd=9;
-      for(const mg of DM_MGS){
+      for(const mg of curMGs()){
         if(mg.occupant&&(mg.occupant.human||mg.occupant.isPlayer)) continue;   // a real person is on it - not takeable
         const d=Math.hypot(p.pos.x-mg.x,p.pos.z-mg.z);
         if(d<3&&d<bd){bd=d;best=mg;}
@@ -3424,14 +3695,15 @@ function dmBotWander(b){
   } else if(b.dmRole==='mg'){
     // the bot assigned to the gun beelines for it every time it's free and it's idle, instead of a
     // coin-flip that left the MG sitting empty for long stretches
-    const mg=DM_MGS.find(m=>m.team===b.team&&!m.occupant);
+    const mg=curMGs().find(m=>m.team===b.team&&!m.occupant);
     if(mg){ B.mgTarget=mg; setGoal(b,mg.x,mg.z,'mg'); if(mg.stairBase) B.path.unshift({x:mg.stairBase.x,z:mg.stairBase.z}); B.urgent=true; return; }
   }
   if(B.mode==='dm'&&B.path.length) return;
-  const side=b.team===0?1:-1,z=DM_OZ+rnd(-40,40);
+  const side=b.team===0?1:-1,z=curOZ()+rnd(-curHZ()+3,curHZ()-3);
   // snipers/support hang back near their own side instead of crossing into the open - assault
-  // bots push all the way across to the enemy's side so the two teams actually cross paths
-  const mid=b.dmRole==='sniper'?DM_OX+side*rnd(0,26):DM_OX+side*rnd(12,DM_HALF_X-4);
+  // bots push all the way across to the enemy's side so the two teams actually cross paths. Scaled
+  // off curHX() (not a hardcoded 26/60) so this scales down sanely on the much narrower neon map too.
+  const mid=b.dmRole==='sniper'?curOX()+side*rnd(0,curHX()*0.43):curOX()+side*rnd(curHX()*0.2,curHX()-4);
   setGoal(b,mid,z,'dm');
   B.urgent=true;   // sprint speed while closing distance - this is a TDM, not a stealth crawl
 }
@@ -3891,17 +4163,19 @@ function drawMap(ctx,W,H,cx,cz,span,big){
   const sc=W/span,wx=x=>(x-cx)*sc+W/2,wz=z=>(z-cz)*sc+H/2;
   if(G.dm){
     // no pre-rendered background for the DM arena (it lives far outside BG's -350..350 range) -
-    // draw its dirt base, mountain-wall boundary and building/container/sandbag footprints directly
-    ctx.fillStyle='#7d6a4a';ctx.fillRect(0,0,W,H);
-    ctx.fillStyle='#57503f';ctx.fillRect(wx(DM_OX-DM_HALF_X),wz(DM_OZ-DM_HALF_Z),(DM_HALF_X*2)*sc,(DM_HALF_Z*2)*sc);
-    for(const p of DM_PROPS){
-      ctx.fillStyle=p.type==='building'?'#9a9c92':p.type==='container'?'#8a5a3a':p.type==='sandbag'?'#c2ab7e':(p.team===0?'#4f8cff':'#ff4b3e');
+    // draw its dirt/pavement base, boundary and building/container/sandbag footprints directly.
+    // Neon gets its own darker asphalt palette instead of the waste map's dirt tones.
+    const neon=G.dmMap==='neon';
+    ctx.fillStyle=neon?'#141519':'#7d6a4a';ctx.fillRect(0,0,W,H);
+    ctx.fillStyle=neon?'#232529':'#57503f';ctx.fillRect(wx(curOX()-curHX()),wz(curOZ()-curHZ()),(curHX()*2)*sc,(curHZ()*2)*sc);
+    for(const p of curProps()){
+      ctx.fillStyle=p.type==='building'?(neon?'#4a4e57':'#9a9c92'):p.type==='container'?'#8a5a3a':p.type==='sandbag'?'#c2ab7e':(p.team===0?'#4f8cff':'#ff4b3e');
       ctx.fillRect(wx(p.x0),wz(p.z0),(p.x1-p.x0)*sc,(p.z1-p.z0)*sc);
     }
     // hilltop MGs didn't show up on the map at all before, which - on top of sitting well behind
     // each base, off the beaten path toward the enemy - made them very easy to miss entirely
     const lwm=W/188;
-    for(const m of DM_MGS||[]){
+    for(const m of curMGs()||[]){
       ctx.save();ctx.translate(wx(m.x),wz(m.z));
       ctx.fillStyle=m.occupant?'#666':'#ffd23d';ctx.strokeStyle=m.team===0?'#4f8cff':'#ff4b3e';ctx.lineWidth=1.5*lwm;
       ctx.beginPath();ctx.arc(0,0,4*lwm,0,Math.PI*2);ctx.fill();ctx.stroke();
@@ -3952,7 +4226,7 @@ const bm=$('bigmap'),bctx=bm.getContext('2d');
 function drawBigmap(){
   const S=Math.round(Math.min(innerWidth-32,innerHeight-32,760)),dpr=Math.min(2,devicePixelRatio||1);
   if(bm.width!==S*dpr){bm.width=bm.height=S*dpr;bm.style.width=bm.style.height=S+'px';}
-  if(G.dm) drawMap(bctx,bm.width,bm.height,DM_OX,DM_OZ,(DM_HALF_X+25)*2,true);
+  if(G.dm) drawMap(bctx,bm.width,bm.height,curOX(),curOZ(),(curHX()+25)*2,true);
   else drawMap(bctx,bm.width,bm.height,0,0,640,true);
 }
 
@@ -4199,7 +4473,11 @@ function newGame(netCfg){
 function newGameDM(netCfg){
   clearGame();
   G.dm=true;DM.score=[0,0];DM.timer=0;DM.feedQ=[];DM.target=50;DM.limit=900;DM.respawnWait=6;DM.airstrikeTier=0;
+  // which arena: the host/solo side picks it (lobby map row or the solo menu's own picker), a client
+  // gets told via the 'start' message instead (see netJoinMatchDM)
+  G.dmMap=netCfg?(netCfg.mapId||'waste'):(G.dmMapSel||'waste');
   if(DM_MGS)DM_MGS.forEach(m=>m.occupant=null);   // a fresh match rebuilds actors from scratch - drop any stale occupant reference from the last one
+  if(NEON_MGS)NEON_MGS.forEach(m=>m.occupant=null);
   const humans=netCfg?[{id:netCfg.myId,name:netCfg.myName,isMe:true,team:netCfg.myTeam},...netCfg.humans.map(h=>({id:h.id,name:h.name,team:h.team}))]:[{id:'solo',name:'나',isMe:true,team:0}];
   // team is whatever each player actually picked in the lobby (see teamPickRow/hostPickTeam) - only
   // falls back to alternating by join order if one somehow reached here without a pick (shouldn't
@@ -4273,7 +4551,9 @@ function netJoinMatch(msg){
 function netJoinMatchDM(msg){
   clearGame();
   G.dm=true;DM.score=[0,0];DM.timer=0;DM.feedQ=[];DM.target=50;DM.limit=900;DM.respawnWait=6;DM.airstrikeTier=0;
+  G.dmMap=msg.mapId||'waste';
   if(DM_MGS)DM_MGS.forEach(m=>m.occupant=null);
+  if(NEON_MGS)NEON_MGS.forEach(m=>m.occupant=null);
   player=null;
   for(const r of msg.roster){
     const a=new Actor(r.id===G.net.myId,r.name,DM_TEAM_COL[r.team]);
@@ -4343,6 +4623,11 @@ document.querySelectorAll('[data-sens]').forEach(el=>el.addEventListener('input'
 syncSens();
 $('startBtn').addEventListener('click',start);
 $('dmBtn').addEventListener('click',startDM);
+// solo/practice map pick (separate from the co-op lobby's own host-only picker) - just a menu-side
+// preference read by newGameDM() when it's called with no netCfg at all
+G.dmMapSel='waste';
+$('soloMapWasteBtn').addEventListener('click',()=>{G.dmMapSel='waste';$('soloMapWasteBtn').classList.add('active');$('soloMapNeonBtn').classList.remove('active');});
+$('soloMapNeonBtn').addEventListener('click',()=>{G.dmMapSel='neon';$('soloMapNeonBtn').classList.add('active');$('soloMapWasteBtn').classList.remove('active');});
 $('againBtn').addEventListener('click',exitToMenu);
 $('pauseMenuBtn').addEventListener('click',exitToMenu);
 $('resumeBtn').addEventListener('click',()=>{
@@ -4458,7 +4743,7 @@ async function createRoom(){
   try{ peer=new Peer('lastcircle-'+code.toLowerCase(),{debug:0,config:{iceServers}}); }
   catch(e){ netRoomMsg('이 브라우저/네트워크에서는 방을 열 수 없습니다.','mpHomeMsg'); return; }
   peer.on('open',()=>{
-    G.net={mode:'host',myId:'host',myName:name,roomCode:code,total:20,started:false,
+    G.net={mode:'host',myId:'host',myName:name,roomCode:code,total:20,started:false,mapId:'waste',
       players:new Map([['host',{id:'host',name,ready:true,host:true,conn:null,team:0}]]),
       suppressLootDiff:false,diffTake:[],diffDrop:[],tickAcc:0};
     $('roomCode').textContent=code;
@@ -4526,9 +4811,10 @@ async function joinRoom(){
       $('lobbyHome').hidden=true;$('lobbyRoom').hidden=false;
       $('roomCode').textContent=code;
       $('mpReadyBtn').hidden=false;$('mpStartBtn').hidden=true;$('totalRow').hidden=true;
-      // both are host-only controls - a client would otherwise see a checkbox/slider that looks
-      // interactive but silently does nothing (onHostMessage-side handlers no-op for non-hosts)
+      // all host-only controls - a client would otherwise see something that looks interactive but
+      // silently does nothing (onHostMessage-side handlers no-op for non-hosts)
       $('mpDM').disabled=true;$('mpTotal').disabled=true;
+      $('mpMapWasteBtn').disabled=true;$('mpMapNeonBtn').disabled=true;
       $('mpReadyBtn').textContent='준비 완료';G.net.ready=false;
       renderLobby();
     });
@@ -4559,7 +4845,7 @@ function dmAssignTeam(){ return dmTeamCount(0)<=dmTeamCount(1)?0:1; }
 function dmTeamOk(p,t){ return p.team===t||dmTeamCount(t)<DM_TEAM_SIZE; }
 function broadcastRoster(){
   const list=[...G.net.players.values()].map(p=>({id:p.id,name:p.name,ready:p.ready,host:p.host,team:p.team}));
-  broadcastAll({type:'roster',players:list,total:G.net.total,dm:!!G.net.dm});
+  broadcastAll({type:'roster',players:list,total:G.net.total,dm:!!G.net.dm,mapId:G.net.mapId||'waste'});
   renderLobby();
 }
 function renderLobby(){
@@ -4567,6 +4853,10 @@ function renderLobby(){
   const players=[...G.net.players.values()];
   const dm=!!G.net.dm;
   $('teamPickRow').hidden=!dm;
+  $('mapPickRow').hidden=!dm;
+  const mapId=G.net.mapId||'waste';
+  $('mpMapWasteBtn').classList.toggle('active',mapId==='waste');
+  $('mpMapNeonBtn').classList.toggle('active',mapId==='neon');
   const rows=players.map(p=>{
     const teamCls=dm&&typeof p.team==='number'?' team'+p.team:'';
     const teamTag=dm&&typeof p.team==='number'?`<span class="tag team${p.team}">${p.team===0?'블루':'레드'}</span>`:'';
@@ -4615,6 +4905,15 @@ function hostPickTeam(t){
   const me=G.net.players.get('host'); if(!me||!dmTeamOk(me,t))return;
   me.team=t; broadcastRoster();
 }
+// map picking (deathmatch lobby only): host-only, like the DM toggle itself - not per-player like
+// team, since everyone has to load the same arena. mpMapWasteBtn/mpMapNeonBtn are disabled for a
+// client the same way mpDM/mpTotal already are (see joinRoom).
+function hostPickMap(id){
+  if(G.net.mode!=='host'||!G.net.dm)return;
+  G.net.mapId=id; broadcastRoster();
+}
+$('mpMapWasteBtn').addEventListener('click',()=>hostPickMap('waste'));
+$('mpMapNeonBtn').addEventListener('click',()=>hostPickMap('neon'));
 $('mpTeam0Btn').addEventListener('click',()=>{
   if(G.net.mode==='host')hostPickTeam(0);
   else if(G.net.mode==='client')sendToHost({type:'team',team:0});
@@ -4689,6 +4988,7 @@ function onClientMessage(msg){
     // the DM checkbox itself stays host-only (see the 'change' listener's mode guard), but a client
     // still needs to know whether it's on - that's what decides whether teamPickRow/team tags show
     G.net.dm=!!msg.dm;$('mpDM').checked=G.net.dm;
+    G.net.mapId=msg.mapId||'waste';
     renderLobby();
   } else if(msg.type==='start'){
     G.net.started=true;
@@ -4727,12 +5027,12 @@ function hostStartMatch(){
   if(dm&&humans.length+1>DM_TEAM_SIZE*2){netRoomMsg(`데스매치는 최대 ${DM_TEAM_SIZE*2}명(${DM_TEAM_SIZE}v${DM_TEAM_SIZE})까지입니다.`);return;}
   G.net.started=true;
   G.net.suppressLootDiff=true;
-  if(dm) newGameDM({myId:'host',myName:G.net.myName,myTeam:G.net.players.get('host').team,humans});
+  if(dm) newGameDM({myId:'host',myName:G.net.myName,myTeam:G.net.players.get('host').team,humans,mapId:G.net.mapId||'waste'});
   else newGame({myId:'host',myName:G.net.myName,humans,total});
   G.net.suppressLootDiff=false;G.net.diffTake=[];G.net.diffDrop=[];
   if(dm){
     const roster=actors.map(a=>({id:a.id,name:a.name,team:a.team,isBot:!a.human&&!a.isPlayer}));
-    broadcastAll({type:'start',dm:true,roster});
+    broadcastAll({type:'start',dm:true,roster,mapId:G.net.mapId||'waste'});
   } else {
     const roster=actors.map(a=>({id:a.id,name:a.name,isBot:!a.human&&!a.isPlayer,shirt:a.shirtColor}));
     const lootMsg=loot.map(it=>({id:it.id,type:it.type,key:it.key,ammo:it.ammo,count:it.count,level:it.level,x:it.x,y:it.y,z:it.z}));

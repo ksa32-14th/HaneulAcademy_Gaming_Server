@@ -1370,6 +1370,16 @@ function buildDeathmatchMap(){
     sandbagRun('z',bx,DM_OZ-16,DM_OZ-5,null,dmGroundY(bx));
     sandbagRun('z',bx,DM_OZ+5,DM_OZ+16,null,dmGroundY(bx));
   }
+  // the last stretch before the bunker itself (roughly x 36-42, past where the village clutter loop
+  // above stops) used to be completely bare ground under direct fire from the roof-mounted MG and
+  // anyone holding the firing line - a couple of small forward sandbag piles, off-centre so they
+  // don't just wall off the direct lane, give an attacking push something to actually use for that
+  // final approach instead of a flat sprint into the open
+  for(const side of [-1,1]){
+    const ax=DM_OX+side*38;
+    sandbagRun('x',DM_OZ-9,ax-1.6,ax+1.6,1.1,dmGroundY(ax));
+    sandbagRun('x',DM_OZ+9,ax-1.6,ax+1.6,1.1,dmGroundY(ax));
+  }
   // a broken line of tall cover roughly down the middle of the arena, so the map *reads* as split
   // into two halves - several gaps left to cross through, not one continuous wall sealing the whole
   // boundary. All HESCO now (was half sandbag) and taller than the default, plus two more segments

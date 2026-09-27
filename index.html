@@ -1937,67 +1937,42 @@ function buildNeonAlleyMap(){
       const z0=sign<0?outerFace:innerFace,z1=sign<0?innerFace:outerFace;
       const roofY=NEON_GROUND+NEON_PODIUM_H,runW=x1-x0;
       const innerZ=sign<0?z1:z0,faceRot=sign<0?0:Math.PI;
-      const depth=NEON_HALF_Z-NEON_ALLEY_HALF_Z,outerBound=sign<0?z0:z1;
+      const depth=NEON_HALF_Z-NEON_ALLEY_HALF_Z;
       const col=NEON_FACADE_COLS[Math.floor(srand()*NEON_FACADE_COLS.length)];
-      // stairwell: climbing now cuts straight INTO the building's own depth (perpendicular to the
-      // lane) instead of hugging along its face - "좁은 골목이 있고 계단을 따라 올라가면 그 골목을
-      // 이루는 건물의 위로 올라갈 수 있다": step off the lane onto a flight that rises as it advances
-      // away from the lane, arriving on the building's own roof. A solid wing of facade is kept on
-      // each side of the stairwell opening instead of the wall just vanishing into a hole.
-      let stairBase=null,stairMidX=null,climbable=false,xa=0,xb=0;
-      if(runW>=9&&srand()<0.85){
-        climbable=true;
-        const stairW=sr(2.6,3.2);
-        xa=x0+sr(1.5,Math.max(1.6,runW-stairW-1.5));xb=xa+stairW;
-      }
-      if(climbable){
-        addBox(x0,NEON_GROUND,z0,xa,NEON_GROUND+NEON_PODIUM_H,z1,col);
-        addBox(xb,NEON_GROUND,z0,x1,NEON_GROUND+NEON_PODIUM_H,z1,col);
-      } else {
-        addBox(x0,NEON_GROUND,z0,x1,NEON_GROUND+NEON_PODIUM_H,z1,col);
-      }
+      addBox(x0,NEON_GROUND,z0,x1,NEON_GROUND+NEON_PODIUM_H,z1,col);
       addBox(x0-0.2,NEON_GROUND+NEON_PODIUM_H,z0-0.2,x1+0.2,NEON_GROUND+NEON_PODIUM_H+0.2,z1+0.2,0x1a1c20);
       NEON_PROPS.push({x0,x1,z0,z1,type:'building'});
-      if(climbable){
-        const stepRun=0.26,runLen=Math.min(depth-2.2,8),nSteps=Math.max(12,Math.floor(runLen/stepRun)),rise=NEON_PODIUM_H/nSteps;
+      // exterior stair flush against the inner face: every tread sits at the same thin Z depth right
+      // at the wall (stairDepth, a small protrusion into the lane) and gains height by advancing
+      // along X, instead of stepping away from the wall into the open alley - this is what actually
+      // reads as "계단이 벽에 붙어 있다" (a perpendicular-into-the-depth version tried earlier looked
+      // detached from the wall and didn't reliably land you on the roof, so back to this proven
+      // design). dirX always climbs toward the segment's own nearer team base (west half -> team 0,
+      // east half -> team 1), and a solid guard rail runs the outer edge at every tread's own height
+      // so a player can't step off the side into open air while climbing. The roof itself is now much
+      // deeper than the stair's own shallow protrusion (see NEON_ALLEY_HALF_Z), so once a climb tops
+      // out at the wall edge there's a large flat rooftop to walk into beyond it.
+      let stairBase=null,stairMidX=null,climbable=false;
+      if(runW>=11&&srand()<0.85){
+        climbable=true;
+        const stepRun=0.26,stairDepth=1.2,dirX=(x0+x1)/2<NEON_OX?-1:1;
+        const runLen=Math.min(runW-1.4,6.5),nSteps=Math.max(6,Math.floor(runLen/stepRun)),rise=NEON_PODIUM_H/nSteps;
+        const xStart=dirX>0?x0+0.7:x1-0.7,outFace=innerZ-sign*stairDepth,rz0=Math.min(outFace,outFace-0.16),rz1=Math.max(outFace,outFace-0.16);
         for(let i=1;i<=nSteps;i++){
-          const za=innerZ+sign*(i-1)*stepRun,zb=innerZ+sign*i*stepRun,topY=NEON_GROUND+i*rise;
-          addBox(xa,NEON_GROUND,Math.min(za,zb),xb,topY,Math.max(za,zb),0x33383f);
-          addBox(xa-0.08,topY-rise,Math.min(za,zb),xa+0.02,topY+0.85,Math.max(za,zb),0x1a1a1a,{collide:false});
-          addBox(xb-0.02,topY-rise,Math.min(za,zb),xb+0.08,topY+0.85,Math.max(za,zb),0x1a1a1a,{collide:false});
+          const sxa=xStart+dirX*(i-1)*stepRun,sxb=xStart+dirX*i*stepRun,topY=NEON_GROUND+i*rise;
+          addBox(Math.min(sxa,sxb),NEON_GROUND,Math.min(innerZ,outFace),Math.max(sxa,sxb),topY,Math.max(innerZ,outFace),0x33383f);
+          addBox(Math.min(sxa,sxb),topY,rz0,Math.max(sxa,sxb),topY+0.85,rz1,0x1a1a1a);
         }
-        const stairEndZ=innerZ+sign*runLen;
-        // past where the climb tops out, the rest of the stairwell strip is a normal roof-height slab
-        // so the walk continues flat onto the building's own roof instead of stopping at a cliff edge
-        addBox(xa,NEON_GROUND,Math.min(stairEndZ,outerBound),xb,NEON_GROUND+NEON_PODIUM_H,Math.max(stairEndZ,outerBound),col);
-        stairBase={x:(xa+xb)/2,z:innerZ-sign*0.8};
-        stairMidX=(xa+xb)/2;
+        stairBase={x:xStart+dirX*nSteps*stepRun,z:innerZ-sign*(stairDepth+0.7)};
+        stairMidX=xStart+dirX*nSteps*stepRun*0.5;
       }
-      // wall-mounted dressing (AC units, vending, magazine stands, crates, flyers) needs to land on
-      // actual facade, not float over the open stairwell gap - picks an X inside whichever wing is
-      // wide enough, weighted by width, and falls back to the plain full-width range on non-climbable
-      // segments (or the rare segment where both wings are too thin to matter).
-      const wingX=(margin)=>{
-        if(!climbable) return x0+sr(margin,Math.max(margin+0.2,runW-margin));
-        const lLo=x0+margin,lHi=xa-0.3,rLo=xb+0.3,rHi=x1-margin;
-        const lw=lHi-lLo,rw=rHi-rLo;
-        if(lw<=0.3&&rw<=0.3) return x0+sr(margin,Math.max(margin+0.2,runW-margin));
-        if(lw<=0.3) return sr(rLo,rHi);
-        if(rw<=0.3) return sr(lLo,lHi);
-        return srand()<lw/(lw+rw)?sr(lLo,lHi):sr(rLo,rHi);
-      };
       // low guard rail along the roof's alley-facing edge - visual + a lane marker rather than a hard
-      // collider, same treatment as the rooftop catwalk's own side rails. Skipped across the stairwell
-      // opening itself so its entrance isn't blocked by a knee-high rail.
+      // collider, same treatment as the rooftop catwalk's own side rails
       {
-        const ra=innerZ,rb=innerZ-sign*0.12,ry0=Math.min(ra,rb),ry1=Math.max(ra,rb);
-        if(climbable){
-          if(xa>x0+0.2) addBox(x0,roofY,ry0,xa,roofY+0.85,ry1,0x14151a,{collide:false});
-          if(x1>xb+0.2) addBox(xb,roofY,ry0,x1,roofY+0.85,ry1,0x14151a,{collide:false});
-        } else {
-          addBox(x0,roofY,ry0,x1,roofY+0.85,ry1,0x14151a,{collide:false});
-        }
+        const ra=innerZ,rb=innerZ-sign*0.12;
+        addBox(x0,roofY,Math.min(ra,rb),x1,roofY+0.85,Math.max(ra,rb),0x14151a,{collide:false});
       }
+      const wingX=(margin)=>x0+sr(margin,Math.max(margin+0.2,runW-margin));
       // a super-tall, non-climbable tower rises off the back of the low roof - the actual arena
       // boundary/skyline, stepped back and lit with a tiled grid of windows, with a real chance of a
       // giant Dotonbori-style billboard on the ones facing the lane

@@ -1928,160 +1928,168 @@ function buildNeonAlleyMap(){
   // not by stepping away from the wall) - "계단은 벽에 딱 붙어서 위치" - each tread's own outer edge
   // carrying a real collider rail so nobody can step off the side while climbing.
   const NEON_PODIUM_H=4.6;
+  // per feedback, the alley and the climbable roof must have ZERO area overlap in plan view - "1층
+  // 위쪽에는 아무것도 없거나 가교만 있어야 함, 2층과 1층을 위에서 보면 어떠한 면적도 겹치지 않음". So
+  // each side is built as two distinct bands instead of one deep podium:
+  //  - Band A: a thin facade wall right against the lane ("1층") - all the signage/AC/vending/flyer
+  //    dressing lives here, and nothing sits on top of it. Two notches are cut through it for the
+  //    corridor's stairwells.
+  //  - Band B: the actual climbable roof ("2층"), set back beyond Band A with its own separate
+  //    footprint - box piles/magazine stands and the super-tall skyline towers live here.
+  // A rooftop catwalk (가교) is the only thing that ever crosses back over the lane/Band A, tying a
+  // stairwell's own Band B on one side to the matching one on the other.
+  const NEON_BAND_A_DEPTH=3.4;
+  const NEON_STAIR_X=[-14,14]; // exactly two stairwells per side, per the reference layout's 4 total
+  const NEON_STAIR_HALF_W=3.6;
   const sideWall=(sign)=>{
-    const innerFace=NEON_OZ+sign*NEON_ALLEY_HALF_Z,outerFace=NEON_OZ+sign*NEON_HALF_Z,segs=[];
-    let x=-NEON_HALF_X,roofSide=0,wallItem=0;
-    while(x<NEON_HALF_X){
-      const w=sr(9,15);
-      const x0=NEON_OX+x,x1=Math.min(NEON_OX+NEON_HALF_X,x0+w);
-      const z0=sign<0?outerFace:innerFace,z1=sign<0?innerFace:outerFace;
-      const roofY=NEON_GROUND+NEON_PODIUM_H,runW=x1-x0;
-      const innerZ=sign<0?z1:z0,faceRot=sign<0?0:Math.PI;
-      const depth=NEON_HALF_Z-NEON_ALLEY_HALF_Z;
-      const col=NEON_FACADE_COLS[Math.floor(srand()*NEON_FACADE_COLS.length)];
-      addBox(x0,NEON_GROUND,z0,x1,NEON_GROUND+NEON_PODIUM_H,z1,col);
-      addBox(x0-0.2,NEON_GROUND+NEON_PODIUM_H,z0-0.2,x1+0.2,NEON_GROUND+NEON_PODIUM_H+0.2,z1+0.2,0x1a1c20);
-      NEON_PROPS.push({x0,x1,z0,z1,type:'building'});
-      // exterior stair flush against the inner face: every tread sits at the same thin Z depth right
-      // at the wall (stairDepth, a small protrusion into the lane) and gains height by advancing
-      // along X, instead of stepping away from the wall into the open alley - this is what actually
-      // reads as "계단이 벽에 붙어 있다" (a perpendicular-into-the-depth version tried earlier looked
-      // detached from the wall and didn't reliably land you on the roof, so back to this proven
-      // design). dirX always climbs toward the segment's own nearer team base (west half -> team 0,
-      // east half -> team 1), and a solid guard rail runs the outer edge at every tread's own height
-      // so a player can't step off the side into open air while climbing. The roof itself is now much
-      // deeper than the stair's own shallow protrusion (see NEON_ALLEY_HALF_Z), so once a climb tops
-      // out at the wall edge there's a large flat rooftop to walk into beyond it.
-      let stairBase=null,stairMidX=null,climbable=false;
-      if(runW>=11&&srand()<0.85){
-        climbable=true;
-        const stepRun=0.26,stairDepth=1.2,dirX=(x0+x1)/2<NEON_OX?-1:1;
-        const runLen=Math.min(runW-1.4,6.5),nSteps=Math.max(6,Math.floor(runLen/stepRun)),rise=NEON_PODIUM_H/nSteps;
-        const xStart=dirX>0?x0+0.7:x1-0.7,outFace=innerZ-sign*stairDepth,rz0=Math.min(outFace,outFace-0.16),rz1=Math.max(outFace,outFace-0.16);
-        for(let i=1;i<=nSteps;i++){
-          const sxa=xStart+dirX*(i-1)*stepRun,sxb=xStart+dirX*i*stepRun,topY=NEON_GROUND+i*rise;
-          addBox(Math.min(sxa,sxb),NEON_GROUND,Math.min(innerZ,outFace),Math.max(sxa,sxb),topY,Math.max(innerZ,outFace),0x33383f);
-          addBox(Math.min(sxa,sxb),topY,rz0,Math.max(sxa,sxb),topY+0.85,rz1,0x1a1a1a);
+    const innerFace=NEON_OZ+sign*NEON_ALLEY_HALF_Z,outerFace=NEON_OZ+sign*NEON_HALF_Z;
+    const bandAFar=innerFace+sign*NEON_BAND_A_DEPTH;
+    const roofY=NEON_GROUND+NEON_PODIUM_H;
+    let wallItem=0;
+    // clips an X-range against both stairwell notches, returning the leftover piece(s) outside them
+    const clipNotches=(a,b)=>{
+      let pieces=[[a,b]];
+      for(const sxLocal of NEON_STAIR_X){
+        const nx0=NEON_OX+sxLocal-NEON_STAIR_HALF_W,nx1=NEON_OX+sxLocal+NEON_STAIR_HALF_W,next=[];
+        for(const [p,q] of pieces){
+          if(nx1<=p||nx0>=q){ next.push([p,q]); continue; }
+          if(nx0>p) next.push([p,nx0]);
+          if(nx1<q) next.push([nx1,q]);
         }
-        stairBase={x:xStart+dirX*nSteps*stepRun,z:innerZ-sign*(stairDepth+0.7)};
-        stairMidX=xStart+dirX*nSteps*stepRun*0.5;
+        pieces=next;
       }
-      // low guard rail along the roof's alley-facing edge - visual + a lane marker rather than a hard
-      // collider, same treatment as the rooftop catwalk's own side rails
-      {
-        const ra=innerZ,rb=innerZ-sign*0.12;
-        addBox(x0,roofY,Math.min(ra,rb),x1,roofY+0.85,Math.max(ra,rb),0x14151a,{collide:false});
+      return pieces;
+    };
+    // ---- Band A: thin lane-facing facade, notched for the two stairwells ----
+    {
+      const z0=sign<0?bandAFar:innerFace,z1=sign<0?innerFace:bandAFar;
+      const innerZ=sign<0?z1:z0,faceRot=sign<0?0:Math.PI;
+      let x=-NEON_HALF_X;
+      while(x<NEON_HALF_X){
+        const w=sr(9,15),rx0=NEON_OX+x,rx1=Math.min(NEON_OX+NEON_HALF_X,rx0+w),runW=rx1-rx0;
+        const col=NEON_FACADE_COLS[Math.floor(srand()*NEON_FACADE_COLS.length)];
+        const pieces=clipNotches(rx0,rx1);
+        for(const [px0,px1] of pieces){
+          if(px1-px0<0.4) continue;
+          addBox(px0,NEON_GROUND,z0,px1,NEON_GROUND+NEON_PODIUM_H,z1,col);
+          addBox(px0-0.2,NEON_GROUND+NEON_PODIUM_H,z0-0.2,px1+0.2,NEON_GROUND+NEON_PODIUM_H+0.2,z1+0.2,0x1a1c20);
+          NEON_PROPS.push({x0:px0,x1:px1,z0,z1,type:'building'});
+        }
+        // wall-mounted dressing needs to land on an actual solid piece, not float over a notch
+        const wingX=(margin)=>{
+          for(const [p,q] of pieces){ if(q-p>=margin*2+0.4) return sr(p+margin,q-margin); }
+          return rx0+sr(1,Math.max(1.2,runW-1));
+        };
+        // signage: dense, human-scaled-but-generous neon panels, several per chunk, mounted flush on
+        // the facade - matched up in size against the dense Kabuki-cho-style reference photos
+        const signN=4+Math.floor(srand()*2);
+        for(let k=0;k<signN;k++){
+          const text=NEON_TEXT_POOL[Math.floor(srand()*NEON_TEXT_POOL.length)],scol=NEON_SIGN_COLS[Math.floor(srand()*NEON_SIGN_COLS.length)];
+          const sx=wingX(0.9),sy=NEON_GROUND+sr(1.3,NEON_PODIUM_H-0.5);
+          if(srand()<0.6){
+            const sw=sr(1.1,1.9),sh=sr(1.6,2.6);
+            neonSign(sx,sy,innerZ+sign*0.06,sw,sh,0,scol,text);
+          } else {
+            const jut=sr(0.7,1.3),sw=sr(1.1,1.9),sh=sr(0.7,1.1);
+            neonSign(sx,sy,innerZ+sign*jut,sw,sh,faceRot+Math.PI/2,scol,text);
+          }
+          if(srand()<0.3) neonGlow(sx,sy,innerZ+sign*1.4,scol,1.0,11);
+        }
+        if(x>-NEON_HALF_X+0.5){
+          const text=NEON_TEXT_POOL[Math.floor(srand()*NEON_TEXT_POOL.length)],scol=NEON_SIGN_COLS[Math.floor(srand()*NEON_SIGN_COLS.length)];
+          neonSign(rx0,NEON_GROUND+sr(1.4,NEON_PODIUM_H-0.6),innerZ+sign*sr(0.8,1.3),sr(1.0,1.6),sr(0.9,1.5),faceRot+Math.PI/2,scol,text);
+        }
+        for(let k=0;k<1+Math.floor(srand()*2);k++){
+          const ax=wingX(1),ay=NEON_GROUND+sr(0.9,NEON_PODIUM_H-0.7);
+          neonACUnit(ax,ay,innerZ+sign*0.22,faceRot);
+        }
+        if(srand()<0.7) neonPipe(wingX(0.6),innerZ+sign*0.1,NEON_GROUND,NEON_GROUND+NEON_PODIUM_H-0.3);
+        {
+          const pick=wallItem%3;wallItem++;
+          if(pick===0) neonVendingPair(wingX(1.4),innerZ+sign*0.4,faceRot);
+          else if(pick===1) neonMagazineStand(wingX(0.8),innerZ+sign*0.32,faceRot);
+          else neonDrinkCrates(wingX(0.7),innerZ+sign*0.25,faceRot);
+          if(srand()<0.35) neonDrinkCrates(wingX(0.7),innerZ+sign*0.25,faceRot);
+        }
+        for(let k=0;k<2+Math.floor(srand()*2);k++){
+          const fy=NEON_GROUND+sr(0.7,1.7);
+          neonFlyer(wingX(0.5),fy,innerZ+sign*0.045,faceRot,sr(-0.25,0.25));
+        }
+        x+=(rx1-rx0)+sr(0.3,1.1);
       }
-      const wingX=(margin)=>x0+sr(margin,Math.max(margin+0.2,runW-margin));
-      // a super-tall, non-climbable tower rises off the back of the low roof - the actual arena
-      // boundary/skyline, stepped back and lit with a tiled grid of windows, with a real chance of a
-      // giant Dotonbori-style billboard on the ones facing the lane
+    }
+    // ---- the two stairwells: hug Band A's inner (lane-facing) face exactly like a normal exterior
+    // stair - climbing along X, a small protrusion into the lane - so it genuinely reads as "붙어
+    //있는" against the wall, then a short flat connector carries the walk on through Band A's own
+    // thin depth and onto Band B behind it. Direction: climbs the same way own-base -> enemy-base
+    // would for whichever half it's in - the west one climbs toward +X, the east one toward -X (both
+    // climb toward the corridor's own centre).
+    const bandAInnerZ=innerFace; // Band A's own lane-facing face
+    for(const sxLocal of NEON_STAIR_X){
+      const dirSign=sxLocal<0?1:-1;
+      const cx=NEON_OX+sxLocal,nx0=cx-NEON_STAIR_HALF_W,nx1=cx+NEON_STAIR_HALF_W;
+      const stepRun=0.26,stairDepth=1.2;
+      const runLen=Math.min(NEON_STAIR_HALF_W*2-1.0,6.5),nSteps=Math.max(6,Math.floor(runLen/stepRun)),rise=NEON_PODIUM_H/nSteps;
+      const xStart=dirSign>0?nx0+0.5:nx1-0.5;
+      const outFace=bandAInnerZ-sign*stairDepth,rz0=Math.min(bandAInnerZ,outFace),rz1=Math.max(bandAInnerZ,outFace);
+      for(let i=1;i<=nSteps;i++){
+        const sxa=xStart+dirSign*(i-1)*stepRun,sxb=xStart+dirSign*i*stepRun,topY=NEON_GROUND+i*rise;
+        addBox(Math.min(sxa,sxb),NEON_GROUND,rz0,Math.max(sxa,sxb),topY,rz1,0x33383f);
+        addBox(Math.min(sxa,sxb),topY,rz0,Math.max(sxa,sxb),topY+0.85,rz1,0x1a1a1a);
+      }
+      const cz0=Math.min(bandAInnerZ,bandAFar),cz1=Math.max(bandAInnerZ,bandAFar);
+      const connCol=NEON_FACADE_COLS[Math.floor(srand()*NEON_FACADE_COLS.length)];
+      addBox(nx0,NEON_GROUND,cz0,nx1,NEON_GROUND+NEON_PODIUM_H,cz1,connCol);
+      const text=NEON_TEXT_POOL[Math.floor(srand()*NEON_TEXT_POOL.length)],scol=NEON_SIGN_COLS[Math.floor(srand()*NEON_SIGN_COLS.length)];
+      neonSign(cx,NEON_GROUND+sr(2.0,NEON_PODIUM_H-0.4),bandAInnerZ+sign*sr(0.7,1.1),sr(0.9,1.3),sr(1.1,1.6),(sign<0?0:Math.PI)+Math.PI/2,scol,text);
+    }
+    // ---- Band B: the actual climbable "2층" - set back beyond Band A, zero overlap with it in plan
+    // view. Rooftop cover and the skyline towers live here.
+    const depthB=NEON_HALF_Z-NEON_ALLEY_HALF_Z-NEON_BAND_A_DEPTH;
+    const bz0=sign<0?outerFace:bandAFar,bz1=sign<0?bandAFar:outerFace;
+    const bInnerZ=sign<0?bz1:bz0,bFaceRot=sign<0?0:Math.PI;
+    let roofSide=0,bx=-NEON_HALF_X;
+    while(bx<NEON_HALF_X){
+      const w=sr(9,15),x0=NEON_OX+bx,x1=Math.min(NEON_OX+NEON_HALF_X,x0+w),runW=x1-x0;
+      const col=NEON_FACADE_COLS[Math.floor(srand()*NEON_FACADE_COLS.length)];
+      addBox(x0,NEON_GROUND,bz0,x1,roofY,bz1,col);
+      addBox(x0-0.2,roofY,bz0-0.2,x1+0.2,roofY+0.2,bz1+0.2,0x1a1c20);
+      NEON_PROPS.push({x0,x1,z0:bz0,z1:bz1,type:'building'});
       {
         const towerIn=sr(0.5,1.3),towerH=sr(34,64),tx0=x0+towerIn,tx1=x1-towerIn;
         if(tx1>tx0+1.5){
-          addBox(tx0,roofY+0.15,z0,tx1,NEON_GROUND+towerH,z1,NEON_FACADE_COLS[Math.floor(srand()*NEON_FACADE_COLS.length)]);
-          neonTowerFace((tx0+tx1)/2,roofY+0.15+(towerH-NEON_PODIUM_H-0.15)/2,innerZ+sign*0.04,tx1-tx0,towerH-NEON_PODIUM_H-0.15,faceRot);
+          addBox(tx0,roofY+0.15,bz0,tx1,NEON_GROUND+towerH,bz1,NEON_FACADE_COLS[Math.floor(srand()*NEON_FACADE_COLS.length)]);
+          neonTowerFace((tx0+tx1)/2,roofY+0.15+(towerH-NEON_PODIUM_H-0.15)/2,bInnerZ+sign*0.04,tx1-tx0,towerH-NEON_PODIUM_H-0.15,bFaceRot);
           if(srand()<0.32){
-            const text=NEON_TEXT_POOL[Math.floor(srand()*NEON_TEXT_POOL.length)],col=NEON_SIGN_COLS[Math.floor(srand()*NEON_SIGN_COLS.length)];
+            const text=NEON_TEXT_POOL[Math.floor(srand()*NEON_TEXT_POOL.length)],scol=NEON_SIGN_COLS[Math.floor(srand()*NEON_SIGN_COLS.length)];
             const bw=Math.min(tx1-tx0-0.6,sr(3.2,5.2)),bh=sr(3.6,6.4),by=roofY+3+sr(0,Math.max(0,towerH-NEON_PODIUM_H-bh-3));
-            neonSign((tx0+tx1)/2,by,innerZ+sign*0.09,bw,bh,0,col,text);
-            neonGlow((tx0+tx1)/2,by,innerZ+sign*1.8,col,1.4,15);
+            neonSign((tx0+tx1)/2,by,bInnerZ+sign*0.09,bw,bh,0,scol,text);
+            neonGlow((tx0+tx1)/2,by,bInnerZ+sign*1.8,scol,1.4,15);
           }
         }
       }
-      segs.push({x0,x1,z0,z1,roofY,stairBase,climbable});
-      // signage: dense, human-scaled-but-generous neon panels, several per segment, mounted flush on
-      // the podium face - matched up in size against the dense Kabuki-cho-style reference photos
-      const signN=4+Math.floor(srand()*2);
-      for(let k=0;k<signN;k++){
-        const text=NEON_TEXT_POOL[Math.floor(srand()*NEON_TEXT_POOL.length)],col=NEON_SIGN_COLS[Math.floor(srand()*NEON_SIGN_COLS.length)];
-        const sx=x0+sr(1.0,Math.max(1.2,runW-1.0)),sy=NEON_GROUND+sr(1.3,NEON_PODIUM_H-0.5);
-        if(srand()<0.6){
-          const sw=sr(1.1,1.9),sh=sr(1.6,2.6);
-          neonSign(sx,sy,innerZ+sign*0.06,sw,sh,0,col,text);
-        } else {
-          const jut=sr(0.7,1.3),sw=sr(1.1,1.9),sh=sr(0.7,1.1);
-          neonSign(sx,sy,innerZ+sign*jut,sw,sh,faceRot+Math.PI/2,col,text);
-        }
-        if(srand()<0.3) neonGlow(sx,sy,innerZ+sign*1.4,col,1.0,11);
-      }
-      // a sign hung right in the seam with the previous segment, jutting out enough to visually
-      // straddle both building faces - "벽에도 걸쳐있도록", the gap-spanning look the reference photo's
-      // corner signage has, instead of every sign sitting mid-face
-      if(x>-NEON_HALF_X+0.5){
-        const text=NEON_TEXT_POOL[Math.floor(srand()*NEON_TEXT_POOL.length)],col=NEON_SIGN_COLS[Math.floor(srand()*NEON_SIGN_COLS.length)];
-        neonSign(x0,NEON_GROUND+sr(1.4,NEON_PODIUM_H-0.6),innerZ+sign*sr(0.8,1.3),sr(1.0,1.6),sr(0.9,1.5),faceRot+Math.PI/2,col,text);
-      }
-      if(climbable){
-        const text=NEON_TEXT_POOL[Math.floor(srand()*NEON_TEXT_POOL.length)],col=NEON_SIGN_COLS[Math.floor(srand()*NEON_SIGN_COLS.length)];
-        const sx=clamp(stairMidX,x0+0.9,x1-0.9),sy=NEON_GROUND+sr(2.0,NEON_PODIUM_H-0.4);
-        neonSign(sx,sy,innerZ+sign*sr(0.7,1.1),sr(0.7,1.1),sr(1.1,1.6),faceRot+Math.PI/2,col,text);
-        if(srand()<0.4) neonGlow(sx,sy,innerZ+sign*1.3,col,1.0,10);
-      }
-      // AC condensers + a vertical pipe run, scattered up the podium face
-      for(let k=0;k<1+Math.floor(srand()*2);k++){
-        const ax=wingX(1),ay=NEON_GROUND+sr(0.9,NEON_PODIUM_H-0.7);
-        neonACUnit(ax,ay,innerZ+sign*0.22,faceRot);
-      }
-      if(srand()<0.7) neonPipe(x0+sr(0.6,1.4),innerZ+sign*0.1,NEON_GROUND,NEON_GROUND+NEON_PODIUM_H-0.3);
-      // a guaranteed wall feature per segment - vending pair / magazine stand / drink crates, cycled
-      // deterministically instead of three independent chances that could all miss and leave a bare
-      // stretch of wall. Denser than before: about a third of segments squeeze in a second feature too.
-      {
-        const pick=wallItem%3;wallItem++;
-        if(pick===0){
-          neonVendingPair(wingX(1.4),innerZ+sign*0.4,faceRot);
-        } else if(pick===1){
-          neonMagazineStand(wingX(0.8),innerZ+sign*0.32,faceRot);
-        } else {
-          neonDrinkCrates(wingX(0.7),innerZ+sign*0.25,faceRot);
-        }
-        if(srand()<0.35) neonDrinkCrates(wingX(0.7),innerZ+sign*0.25,faceRot);
-      }
-      // a few torn flyers pasted straight onto the wall
-      for(let k=0;k<2+Math.floor(srand()*2);k++){
-        const fy=NEON_GROUND+sr(0.7,1.7);
-        neonFlyer(wingX(0.5),fy,innerZ+sign*0.045,faceRot,sr(-0.25,0.25));
-      }
-      // rooftop cover: guaranteed on every segment wide enough for it (was a 0.7 chance), still pushed
-      // to one side (alternating which side segment to segment) so there's always a clear walking lane
-      // down the other side instead of a wall blocking the whole terrace. Every third rooftop gets a
-      // magazine stand instead of box piles, for variety.
       if(runW>=9){
-        const toward=roofSide%2===0;
-        const baseZ=toward?innerZ+sign*(depth*0.62):innerZ+sign*(depth*0.22);
+        const baseZ=bInnerZ+sign*sr(1.5,Math.max(2,depthB-1.5));
         roofSide++;
-        // roof props sit at a fixed roofY regardless of local surface height, so their X has to land
-        // in a wing that's genuinely solid all the way up at that Z depth - wingX guarantees that,
-        // since each wing is a full-depth solid block, unlike the stairwell strip which only reaches
-        // roofY once past its own climb.
         if(roofSide%3===0){
-          neonMagazineStand(wingX(1.2),baseZ,faceRot);
+          neonMagazineStand(x0+sr(1.2,Math.max(1.6,runW-1.2)),baseZ,bFaceRot);
         } else {
           const n=3+Math.floor(srand()*3);
-          for(let k=0;k<n;k++){
-            neonBoxPile(wingX(1.0),baseZ+sr(-1.2,1.2),true,roofY);
-          }
+          for(let k=0;k<n;k++) neonBoxPile(x0+sr(1.0,Math.max(1.4,runW-1.0)),baseZ+sr(-1.2,1.2),true,roofY);
         }
       }
-      x+=(x1-x0)+sr(0.3,1.1);
+      bx+=(x1-x0)+sr(0.3,1.1);
     }
-    return segs;
   };
-  const southSegs=sideWall(-1),northSegs=sideWall(1);
-  // rooftop catwalks: at a few points down the lane, bridge a climbable south podium to a climbable
-  // north one at (roughly) the same X - the actual "walk up one side, cross over, come down the
-  // other" route. Both walls were generated independently so their segment boundaries don't line up
-  // exactly; picking the nearest climbable segment on each side to a target X is simpler and more
-  // robust than trying to force the two loops to agree on breakpoints.
-  const nearestClimbable=(segs,x)=>{
-    let best=null,bd=Infinity;
-    for(const s of segs){ if(!s.climbable) continue; const d=Math.abs((s.x0+s.x1)/2-x); if(d<bd){bd=d;best=s;} }
-    return bd<9?best:null;
-  };
-  for(const cx of [-20,-12,-4,4,12,20]){
-    const s=nearestClimbable(southSegs,NEON_OX+cx),n=nearestClimbable(northSegs,NEON_OX+cx);
-    if(s&&n) neonCatwalk(s,n);
+  sideWall(-1);sideWall(1);
+  // rooftop catwalks: exactly one per stairwell pair, bridging Band B on one side to Band B on the
+  // other at that same X - the whole span (a stairwell's Band B, back over its own Band A facade,
+  // across the lane, over the opposite Band A, into the opposite Band B) is deliberately the ONLY
+  // thing that ever crosses above the lane.
+  for(const sxLocal of NEON_STAIR_X){
+    const cx=NEON_OX+sxLocal,x0=cx-3,x1=cx+3,roofY=NEON_GROUND+NEON_PODIUM_H;
+    const southBandAFar=NEON_OZ-NEON_ALLEY_HALF_Z-NEON_BAND_A_DEPTH,northBandAFar=NEON_OZ+NEON_ALLEY_HALF_Z+NEON_BAND_A_DEPTH;
+    neonCatwalk({x0,x1,z1:southBandAFar,roofY},{x0,x1,z0:northBandAFar,roofY});
   }
   // the two ends of the corridor are closed off with the same super-tall skyline treatment as the
   // long sides - "좌우 앞뒤 경계는 초고층 건물로"
@@ -2137,16 +2145,19 @@ function buildNeonAlleyMap(){
   // guaranteed anchors first, matched to the reference layout sketch: a couple of cars blocking each
   // far end of the lane (the "차량" icons at both extremes), a street vendor cart parked right at the
   // corridor's own centre, and a magazine stand tucked near each base's own corner.
+  // kept clear of the two stairwell notches (NEON_STAIR_X +-NEON_STAIR_HALF_W) - "계단과 전신주가
+  // 겹치면 안됨" applies just as much to parked cars/carts sitting right in front of a stairwell.
   for(const side of [-1,1]){
-    const carX=NEON_OX+side*16;
+    const carX=NEON_OX+side*7;
     neonParkedCar(carX,NEON_OZ+sr(-NEON_LANE*0.5,NEON_LANE*0.5),Math.PI/2+sr(-0.35,0.35));
-    neonParkedCar(carX+side*sr(3.5,5),NEON_OZ+sr(-NEON_LANE*0.7,NEON_LANE*0.7),Math.PI/2+sr(-0.35,0.35));
+    neonParkedCar(carX-side*sr(3,4.5),NEON_OZ+sr(-NEON_LANE*0.7,NEON_LANE*0.7),Math.PI/2+sr(-0.35,0.35));
     neonMagazineStand(NEON_OX+side*(BASE_DX-5),NEON_OZ+side*(NEON_ALLEY_HALF_Z-1.2),side<0?Math.PI/2:-Math.PI/2);
   }
   neonCart(NEON_OX+sr(-2.5,2.5),NEON_OZ+sr(-NEON_LANE*0.5,NEON_LANE*0.5),sr(0,Math.PI*2));
   neonCart(NEON_OX+sr(-9,-5),NEON_OZ+sr(-NEON_LANE*0.7,NEON_LANE*0.7),sr(0,Math.PI*2));
   let ci=0;
   for(let lx=-15;lx<=15;lx+=sr(1.6,2.3)){
+    if(NEON_STAIR_X.some(sx=>Math.abs(lx-sx)<NEON_STAIR_HALF_W+1.5)) continue;
     const cx=NEON_OX+lx,cz=NEON_OZ+sr(-NEON_LANE,NEON_LANE),kind=ci%7;
     if(kind===0) neonCart(cx,cz,sr(0,Math.PI*2));
     else if(kind===1) neonBoxPile(cx,cz);
@@ -2164,6 +2175,9 @@ function buildNeonAlleyMap(){
   for(const sign of [-1,1]){
     let prev=null;
     for(let x=-NEON_HALF_X+8;x<NEON_HALF_X-6;x+=sr(6,7.5)){
+      // a pole landing inside a stairwell's own notch would overlap the stair - "계단과 전신주가 겹치면
+      // 안됨" - so skip this spot entirely; the wire below just spans the (slightly wider) gap instead.
+      if(NEON_STAIR_X.some(sx=>Math.abs(x-sx)<NEON_STAIR_HALF_W+0.8)) continue;
       // -0.6, not +0.6: that used to push the pole 0.6 into the building's own footprint (the podium
       // starts exactly at NEON_ALLEY_HALF_Z), reading as the pole and the rooftop overlapping. This
       // keeps it in the open lane, just off the kerb.

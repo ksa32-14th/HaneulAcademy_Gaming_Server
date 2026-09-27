@@ -1751,6 +1751,9 @@ function neonCatwalk(south,north){
   const midX=(x0+x1)/2,midZ=(z0+z1)/2,text=NEON_TEXT_POOL[Math.floor(srand()*NEON_TEXT_POOL.length)],col=NEON_SIGN_COLS[Math.floor(srand()*NEON_SIGN_COLS.length)];
   neonSign(midX,y-0.75,midZ,1.4,0.95,Math.PI/2,col,text);
   if(srand()<0.6) neonGlow(midX,y-0.75,midZ,col,1.2,11);
+  // a ground-level vending machine pair sitting right on the lane centreline, directly under the deck
+  // - the "가교 밑에 자판기 두 대, 하나는 다리에 반쯤 가려짐" spot from the reference layout sketch
+  neonVendingPair(midX+sr(-0.6,0.6),midZ,Math.PI/2);
 }
 // small two-wheeled street vendor cart with a cloth awning - low physical cover for the centre lane
 function neonCart(cx,cz,rotY){

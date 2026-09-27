@@ -1605,11 +1605,10 @@ const NEON_FACADE_COLS=[0x24262b,0x2c2f36,0x1c1e23,0x333842,0x2a2d33];
 const NEON_SIGN_COLS=[0xff2d95,0x29e0ff,0xb537f2,0xff5b3d,0x39ff8f,0xffd23d];
 const NEON_TEAM_COL_MAP=[0x2f5fa8,0xa8342f]; // same values as DM_TEAM_COL, duplicated here since that
                                               // const isn't defined yet at this point in the file
-// short generic signage words (kept to common, non-brand nouns - ramen/sushi/tea/etc, not real store
-// names), split by script so a sign only ever draws from one and never mixes glyph sets
-const NEON_JP_TEXT=['ラーメン','寿司','酒場','焼肉','カラオケ','両替','居酒屋','食堂','24時','喫茶'];
-const NEON_CN_TEXT=['面馆','茶馆','酒吧','网吧','药店','便利店','夜市','小吃','电玩','火锅'];
-const NEON_TEXT_POOL=[...NEON_JP_TEXT,...NEON_CN_TEXT];
+// short generic Japanese signage words (kept to common, non-brand nouns - ramen/sushi/tea/etc, not
+// real store names) - Japanese only per feedback, a bigger pool since signs are now much denser
+const NEON_TEXT_POOL=['ラーメン','寿司','酒場','焼肉','カラオケ','両替','居酒屋','食堂','24時','喫茶',
+  '餃子','焼鳥','中華','洋食','立飲み','個室','宴会','麻雀','漫画','マッサージ','定食','弁当','屋台','市場'];
 // canvas-drawn sign face: a glowing border + the word itself, vertical (stacked one character per
 // line, the common orientation for real hanging signboards) or horizontal. Text is baked into the
 // canvas once at draw time - if the Noto Sans JP/SC webfonts haven't finished downloading yet that
@@ -1669,20 +1668,34 @@ function neonDumpster(cx,cz,rot){
   NEON_PROPS.push({x0:cx-l/2,x1:cx+l/2,z0:cz-w/2,z1:cz+w/2,type:'container'});
 }
 // street vending machine: a plain body box (collidable, via a noDraw addBox so it doesn't double up
-// with the Group's own visible box) plus a bright lit front panel carrying its own little glow light
+// with the Group's own visible box) plus a lit header and a grid of small coloured "product" panels on
+// its face - reads as a stocked drink machine rather than a single blank light panel
 const NEON_VEND_COLS=[0xd6242f,0x1f6fd6,0x1c1c1c,0x2c8a4a];
 function neonVending(cx,cz,rotY){
   const bodyCol=NEON_VEND_COLS[Math.floor(srand()*NEON_VEND_COLS.length)];
   const g=new THREE.Group();
-  g.add(M(gB(0.9,1.8,0.7),bodyCol,0,0.9,0));
-  const panel=new THREE.Mesh(new THREE.PlaneGeometry(0.68,1.25),new THREE.MeshBasicMaterial({color:0xdfefff}));
-  panel.position.set(0,0.95,0.355);g.add(panel);
+  g.add(M(gB(0.9,1.75,0.65),bodyCol,0,0.875,0));
+  const headerCol=[0xffffff,0xffd23d,0x29e0ff][Math.floor(srand()*3)];
+  g.add(M(gB(0.82,0.2,0.03),headerCol,0,1.52,0.335));
+  const rowCols=[0xff4b3e,0xffd23d,0x39ff8f,0x29e0ff,0xffffff,0xff8fa8];
+  for(let r=0;r<3;r++){
+    for(let c=0;c<3;c++){
+      g.add(M(gB(0.16,0.2,0.02),rowCols[Math.floor(srand()*rowCols.length)],-0.26+c*0.26,1.24-r*0.27,0.335));
+    }
+  }
   g.position.set(cx,0,cz);g.rotation.y=rotY;
   g.traverse(m=>{if(m.isMesh)m.castShadow=true;});
   scene.add(g);
-  neonGlow(cx+Math.sin(rotY)*0.4,1.1,cz+Math.cos(rotY)*0.4,0x8fd8ff,0.5,4);
-  addBox(cx-0.48,0,cz-0.38,cx+0.48,1.82,cz+0.38,bodyCol,{noDraw:true});
-  NEON_PROPS.push({x0:cx-0.48,x1:cx+0.48,z0:cz-0.38,z1:cz+0.38,type:'container'});
+  neonGlow(cx+Math.sin(rotY)*0.4,1.1,cz+Math.cos(rotY)*0.4,0x8fd8ff,0.6,4.5);
+  addBox(cx-0.48,0,cz-0.35,cx+0.48,1.78,cz+0.35,bodyCol,{noDraw:true});
+  NEON_PROPS.push({x0:cx-0.48,x1:cx+0.48,z0:cz-0.35,z1:cz+0.35,type:'container'});
+}
+// two machines side by side, the way real vending machines almost always sit - rotY's local +X is the
+// pairing axis, same convention neonVending's own front-facing +Z uses for rotY=0
+function neonVendingPair(cx,cz,rotY){
+  const d=0.5;
+  neonVending(cx+d*Math.cos(rotY),cz-d*Math.sin(rotY),rotY);
+  neonVending(cx-d*Math.cos(rotY),cz+d*Math.sin(rotY),rotY);
 }
 // wall-mounted AC condenser unit - pure cosmetic greeble, no collision (small enough nobody's
 // pathing is affected, and it's always flush against a wall a player can't stand inside anyway)
@@ -1703,6 +1716,32 @@ function neonPipe(x,z,y0,y1){
   m.position.set(x,(y0+y1)/2,z);m.castShadow=true;
   scene.add(m);
 }
+// a tiled grid of small lit windows, generated once and reused (cloned per face so each face can set
+// its own repeat count) - the far skyline backdrop is built from super-tall towers and painting every
+// window as its own box would be far too much geometry, so this is one shared canvas instead
+let neonWindowTexBase=null;
+function neonWindowTex(){
+  if(neonWindowTexBase) return neonWindowTexBase;
+  const cvs=document.createElement('canvas');cvs.width=64;cvs.height=64;
+  const ctx=cvs.getContext('2d');
+  ctx.fillStyle='#0c0d12';ctx.fillRect(0,0,64,64);
+  for(let ry=0;ry<8;ry++) for(let rx=0;rx<8;rx++){
+    if(srand()<0.5){
+      ctx.fillStyle=srand()<0.7?'#ffd696':'#a0dcff';
+      ctx.fillRect(rx*8+1,ry*8+1,5,5);
+    }
+  }
+  neonWindowTexBase=new THREE.CanvasTexture(cvs);
+  neonWindowTexBase.wrapS=neonWindowTexBase.wrapT=THREE.RepeatWrapping;
+  return neonWindowTexBase;
+}
+// a lit-window overlay flush on a tall tower face - cosmetic only, tiled to the face's own size
+function neonTowerFace(x,y,z,w,h,rotY){
+  const tex=neonWindowTex().clone();tex.needsUpdate=true;
+  tex.repeat.set(Math.max(1,Math.round(w/1.4)),Math.max(1,Math.round(h/1.4)));
+  const m=new THREE.Mesh(new THREE.PlaneGeometry(w,h),new THREE.MeshBasicMaterial({map:tex}));
+  m.position.set(x,y,z);m.rotation.y=rotY;scene.add(m);
+}
 // straight rooftop catwalk between a south-side and a north-side podium roof, same height - just a
 // thin walkable deck with a low rail on each side, slightly overlapping both roofs for a seamless join
 function neonCatwalk(south,north){
@@ -1714,6 +1753,11 @@ function neonCatwalk(south,north){
   addBox(x0,y+0.22,z0,x0+0.1,y+0.22+0.8,z1,0x14151a,{collide:false});
   addBox(x1-0.1,y+0.22,z0,x1,y+0.22+0.8,z1,0x14151a,{collide:false});
   NEON_PROPS.push({x0,x1,z0,z1,type:'building'});
+  // a neon ad hanging under the deck, its face turned along the lane so it reads from a distance -
+  // the "가교 아래쪽에 걸리는" banner-under-the-bridge look
+  const midX=(x0+x1)/2,midZ=(z0+z1)/2,text=NEON_TEXT_POOL[Math.floor(srand()*NEON_TEXT_POOL.length)],col=NEON_SIGN_COLS[Math.floor(srand()*NEON_SIGN_COLS.length)];
+  neonSign(midX,y-0.75,midZ,1.4,0.95,Math.PI/2,col,text);
+  if(srand()<0.6) neonGlow(midX,y-0.75,midZ,col,0.9,9);
 }
 // small two-wheeled street vendor cart with a cloth awning - low physical cover for the centre lane
 function neonCart(cx,cz,rotY){
@@ -1734,24 +1778,30 @@ function neonCart(cx,cz,rotY){
   NEON_PROPS.push({x0:cx-0.9,x1:cx+0.9,z0:cz-0.55,z1:cz+0.55,type:'sandbag'});
 }
 // a loose pile of cardboard boxes - smaller and messier than neonCrate's stacked wooden crates
-function neonBoxPile(cx,cz){
-  const n=3+Math.floor(srand()*3),cols=[0xb08a55,0xc4a06a,0x9c7a4a,0xd1b587];
-  let by=0;
-  for(let i=0;i<n;i++){
-    const s=0.45+srand()*0.35,jx=sr(-0.4,0.4),jz=sr(-0.4,0.4),h=0.35+srand()*0.15;
-    const col=cols[Math.floor(srand()*cols.length)];
-    addBox(cx-s/2+jx,by,cz-s/2+jz,cx+s/2+jx,by+h,cz+s/2+jz,col);
-    by+=h*0.72;
+// a neatly stacked pallet of cardboard boxes - a flush 2x2 bottom layer plus a smaller top layer,
+// same size and square-aligned (only a hairline jitter) so it reads as stacked, not scattered.
+// big=true (rooftop cover) doubles the footprint/height; baseY lets it sit on a roof instead of ground
+function neonBoxPile(cx,cz,big,baseY){
+  const y0=baseY||0,s=big?0.62:0.42,h=big?0.4:0.3,cols=[0xb08a55,0xc4a06a,0x9c7a4a,0xd1b587];
+  const half=s/2+0.01;
+  for(const[ox,oz]of[[-half,-half],[half,-half],[-half,half],[half,half]]){
+    const col=cols[Math.floor(srand()*cols.length)],jx=sr(-0.02,0.02),jz=sr(-0.02,0.02);
+    addBox(cx+ox-s/2+jx,y0,cz+oz-s/2+jz,cx+ox+s/2+jx,y0+h,cz+oz+s/2+jz,col);
   }
-  NEON_PROPS.push({x0:cx-0.7,x1:cx+0.7,z0:cz-0.7,z1:cz+0.7,type:'sandbag'});
+  const ts=s*0.95;
+  addBox(cx-ts/2,y0+h,cz-ts/2,cx+ts/2,y0+h*1.9,cz+ts/2,cols[Math.floor(srand()*cols.length)]);
+  const half2=s+0.5;
+  NEON_PROPS.push({x0:cx-half2,x1:cx+half2,z0:cz-half2,z1:cz+half2,type:'sandbag'});
 }
 // an illegally parked car - tall, solid cover. rotY is left to the caller so a scatter of them can sit
-// at careless, non-parallel angles instead of neatly aligned with the lane
+// at careless, non-parallel angles instead of neatly aligned with the lane. The cabin is one solid
+// tone (no separate dark "glass" insert) - a tinted band there used to read as see-through windows
+// even though the whole car is a single opaque collider, which looked like a bug in play
 function neonParkedCar(cx,cz,rotY){
   const g=new THREE.Group(),col=[0x8a1c1c,0x1c3a6b,0x2b2b2b,0x6b6b6b,0x1c5c3a][Math.floor(srand()*5)];
+  const cabCol=0x14161a;
   g.add(M(gB(1.85,0.62,4.3),col,0,0.55,0));
-  g.add(M(gB(1.55,0.5,2.1),col,0,1.04,-0.3));
-  g.add(M(gB(1.6,0.32,1.9),0x0a1620,0,1.05,-0.3));
+  g.add(M(gB(1.55,0.5,2.1),cabCol,0,1.04,-0.3));
   const wc=0x0c0c0c;
   g.add(M(gB(0.28,0.5,0.5),wc,-0.85,0.28,1.4));
   g.add(M(gB(0.28,0.5,0.5),wc,0.85,0.28,1.4));
@@ -1763,40 +1813,80 @@ function neonParkedCar(cx,cz,rotY){
   addBox(cx-0.95,0,cz-2.2,cx+0.95,1.35,cz+2.2,col,{noDraw:true});
   NEON_PROPS.push({x0:cx-0.95,x1:cx+0.95,z0:cz-2.2,z1:cz+2.2,type:'container'});
 }
-// utility pole: cross-arm + insulators + a couple of drooping wire stubs - decorative, only its shaft
-// (a plain Y-axis cylinder, not gC's Z-axis one) is a collider
-function neonUtilityPole(x,z,rotY){
-  const poleCol=0x2e2a24,armCol=0x1c1a16,ph=11,g=new THREE.Group();
-  const pole=new THREE.Mesh(new THREE.CylinderGeometry(0.11,0.15,ph,8),lam(poleCol));
+// a small stack of beverage crates - just tall enough to crouch-cover behind, distinct from the
+// cardboard box piles above
+function neonDrinkCrates(cx,cz,rotY){
+  const g=new THREE.Group(),crateCols=[0xd6242f,0x1f6fd6,0xffd23d,0x2c8a4a],crateH=0.26;
+  for(let r=0;r<3;r++){
+    for(let c=0;c<2;c++){
+      g.add(M(gB(0.36,crateH,0.36),crateCols[Math.floor(srand()*crateCols.length)],-0.19+c*0.38,crateH/2+r*crateH,0));
+    }
+  }
+  g.position.set(cx,0,cz);g.rotation.y=rotY;
+  g.traverse(m=>{if(m.isMesh){m.castShadow=true;m.receiveShadow=true;}});
+  scene.add(g);
+  addBox(cx-0.4,0,cz-0.2,cx+0.4,3*crateH,cz+0.2,0x888888,{noDraw:true});
+  NEON_PROPS.push({x0:cx-0.4,x1:cx+0.4,z0:cz-0.2,z1:cz+0.2,type:'sandbag'});
+}
+// a torn paper flyer pasted flat against a wall/pole/pillar - pure decoration, never collides
+function neonFlyer(x,y,z,rotY,tilt){
+  const cols=[0xf2f2ea,0xffe27a,0xff9fb8,0xdfefff];
+  const m=new THREE.Mesh(new THREE.PlaneGeometry(0.22,0.32),new THREE.MeshBasicMaterial({color:cols[Math.floor(srand()*cols.length)],side:THREE.DoubleSide}));
+  m.position.set(x,y,z);m.rotation.y=rotY;if(tilt)m.rotation.z=tilt;
+  scene.add(m);
+}
+// a street magazine/manga rack against the wall - two side posts and a few small coloured cover panels
+function neonMagazineStand(cx,cz,rotY){
+  const g=new THREE.Group(),frameCol=0xd8d8d8;
+  g.add(M(gB(0.05,1.3,0.46),frameCol,-0.28,0.65,0));
+  g.add(M(gB(0.05,1.3,0.46),frameCol,0.28,0.65,0));
+  const covCols=[0xff4b3e,0x29e0ff,0xffd23d,0x39ff8f,0xb537f2];
+  for(let i=0;i<4;i++) g.add(M(gB(0.48,0.24,0.03),covCols[Math.floor(srand()*covCols.length)],0,0.32+i*0.28,0.22));
+  g.position.set(cx,0,cz);g.rotation.y=rotY;
+  g.traverse(m=>{if(m.isMesh)m.castShadow=true;});
+  scene.add(g);
+  addBox(cx-0.32,0,cz-0.26,cx+0.32,1.3,cz+0.26,frameCol,{noDraw:true});
+  NEON_PROPS.push({x0:cx-0.32,x1:cx+0.32,z0:cz-0.26,z1:cz+0.26,type:'container'});
+}
+// combined Korean-style utility pole + street lamp: a single tapered concrete-grey pole with a low
+// power-line insulator bracket and a curved arm near the top carrying a cobra-head lamp - the common
+// Korean back-street pole/light combo, rather than a separate lamp post and a separate pole. Returns
+// its own top point so neonWireSpan can string a line to the next pole down the row.
+function neonPoleLamp(x,z,rotY){
+  const poleCol=0x5a5f63,armCol=0x2c2f32,ph=7.4,g=new THREE.Group();
+  const pole=new THREE.Mesh(new THREE.CylinderGeometry(0.1,0.15,ph,8),lam(poleCol));
   pole.position.set(0,ph/2,0);g.add(pole);
-  g.add(M(gB(1.6,0.1,0.1),armCol,0,ph-1.1,0));
-  g.add(M(gB(0.1,0.1,1.0),armCol,0,ph-1.7,0));
-  const insMat=lam(0x3a3a3a);
-  const i1=new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.05,0.22,6),insMat);i1.position.set(-0.7,ph-0.95,0);g.add(i1);
-  const i2=new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.05,0.22,6),insMat);i2.position.set(0.7,ph-0.95,0);g.add(i2);
-  const wireMat=new THREE.MeshBasicMaterial({color:0x141414});
-  const w1=new THREE.Mesh(new THREE.CylinderGeometry(0.02,0.02,2.4,4),wireMat);w1.position.set(-1.2,ph-1.4,0);w1.rotation.z=Math.PI/2-0.22;g.add(w1);
-  const w2=new THREE.Mesh(new THREE.CylinderGeometry(0.02,0.02,2.4,4),wireMat);w2.position.set(1.2,ph-1.4,0);w2.rotation.z=-(Math.PI/2-0.22);g.add(w2);
+  const insMat=lam(0x2a2a2a);
+  const ins=new THREE.Mesh(new THREE.CylinderGeometry(0.045,0.045,0.2,6),insMat);
+  ins.position.set(0,ph-2.0,0.13);ins.rotation.x=Math.PI/2;g.add(ins);
+  g.add(M(gB(1.05,0.07,0.07),armCol,0.5,ph-0.32,0));
+  g.add(M(gB(0.07,0.32,0.07),armCol,1.0,ph-0.5,0));
+  g.add(M(gB(0.4,0.15,0.2),0x1c1e20,1.0,ph-0.68,0));
+  const bulb=new THREE.Mesh(new THREE.SphereGeometry(0.12,8,6),new THREE.MeshBasicMaterial({color:0xdcefff}));
+  bulb.position.set(1.0,ph-0.76,0);g.add(bulb);
   g.position.set(x,0,z);g.rotation.y=rotY;
   g.traverse(m=>{if(m.isMesh)m.castShadow=true;});
   scene.add(g);
   addBox(x-0.16,0,z-0.16,x+0.16,ph,z+0.16,poleCol,{noDraw:true});
   NEON_PROPS.push({x0:x-0.16,x1:x+0.16,z0:z-0.16,z1:z+0.16,type:'container'});
+  const lampX=x+1.0*Math.cos(rotY),lampZ=z-1.0*Math.sin(rotY);
+  neonGlow(lampX,ph-0.78,lampZ,0xbfe0ff,1.3,12);
+  return {x,z,y:ph-1.9};
 }
-// street lamp: a slim pole + head with its own warm point light - the lane's only real ground-level
-// light source, on top of the dim shared night ambience, so the alley reads as dark-but-lit rather
-// than uniformly pitch black
-function neonStreetlamp(x,z){
-  const poleCol=0x1c1e22,h=4.2,g=new THREE.Group();
-  const pole=new THREE.Mesh(new THREE.CylinderGeometry(0.07,0.09,h,8),lam(poleCol));
-  pole.position.set(0,h/2,0);pole.castShadow=true;g.add(pole);
-  g.add(M(gB(0.5,0.12,0.5),0x14151a,0,h-0.06,0));
-  const bulb=new THREE.Mesh(new THREE.SphereGeometry(0.16,8,6),new THREE.MeshBasicMaterial({color:0xdcefff}));
-  bulb.position.set(0,h-0.28,0);g.add(bulb);
-  g.position.set(x,0,z);
-  scene.add(g);
-  addBox(x-0.1,0,z-0.1,x+0.1,h,z+0.1,poleCol,{noDraw:true});
-  neonGlow(x,h-0.3,z,0xbfe0ff,1.3,13);
+// a sagging two-segment wire between two poles' own connection points
+function neonWireSpan(a,b){
+  const midX=(a.x+b.x)/2,midZ=(a.z+b.z)/2,midY=Math.min(a.y,b.y)-0.35;
+  const wireMat=new THREE.MeshBasicMaterial({color:0x141414});
+  const seg=(p,q)=>{
+    const dx=q.x-p.x,dy=q.y-p.y,dz=q.z-p.z,len=Math.hypot(dx,dy,dz);
+    if(len<0.05) return;
+    const m=new THREE.Mesh(new THREE.CylinderGeometry(0.015,0.015,len,4),wireMat);
+    m.position.set((p.x+q.x)/2,(p.y+q.y)/2,(p.z+q.z)/2);
+    m.quaternion.setFromUnitVectors(new V3(0,1,0),new V3(dx,dy,dz).normalize());
+    scene.add(m);
+  };
+  seg({x:a.x,y:a.y,z:a.z},{x:midX,y:midY,z:midZ});
+  seg({x:midX,y:midY,z:midZ},{x:b.x,y:b.y,z:b.z});
 }
 function buildNeonAlleyMap(){
   const BASE_DX=26;
@@ -1817,31 +1907,26 @@ function buildNeonAlleyMap(){
     const m=new THREE.Mesh(g,new THREE.MeshLambertMaterial({vertexColors:true}));
     m.position.set(NEON_OX,NEON_GROUND,NEON_OZ);m.receiveShadow=true;scene.add(m);
   }
-  // boundary: tall building facades along both long sides. Each segment's footprint runs from the
-  // outer NEON_HALF_Z boundary in to the alley's own inner edge (NEON_ALLEY_HALF_Z) - the "building is
-  // a quarter of the width, alley is half" split - so unlike the previous version, the whole podium
-  // (and its roof) sits fully inside the HALF_X/HALF_Z clamp resolve() enforces: nothing here is ever
-  // out-of-bounds geometry a player can see but never actually stand on. Every segment is two stacked
-  // boxes: a full-depth PODIUM up to a shared height (NEON_PODIUM_H), topped by a narrower, taller,
-  // non-climbable TOWER continuing the skyline, stepped back so the podium roof reads as its own
-  // standable terrace with a guard rail along its alley-facing edge. Most segments also get an
+  // boundary: low building facades along both long sides, about a story and a half tall - real-world
+  // scale, matched against the player capsule's own ~1.75-tall height, instead of the skyscraper slab
+  // this arena used to have. Each segment's footprint runs from the outer NEON_HALF_Z boundary in to
+  // the alley's own inner edge (NEON_ALLEY_HALF_Z) - the "building is a quarter of the width, alley is
+  // half" split - so the whole roof sits fully inside the HALF_X/HALF_Z clamp resolve() enforces and is
+  // genuinely walkable, with a guard rail along its alley-facing edge. Most segments also get an
   // exterior stair run flush against the inner face (climbing by advancing along the segment's length,
-  // not by stepping away from the wall) - "계단은 벽에 딱 붙어서 위치". Podium roofs on facing segments
-  // at matching X get linked by a rooftop catwalk straight across the lane (see the loop right after
-  // both walls are built).
-  const NEON_PODIUM_H=9;
+  // not by stepping away from the wall) - "계단은 벽에 딱 붙어서 위치" - each tread's own outer edge
+  // carrying a real collider rail so nobody can step off the side while climbing.
+  const NEON_PODIUM_H=4.6;
   const sideWall=(sign)=>{
     const innerFace=NEON_OZ+sign*NEON_ALLEY_HALF_Z,outerFace=NEON_OZ+sign*NEON_HALF_Z,segs=[];
-    let x=-NEON_HALF_X;
+    let x=-NEON_HALF_X,roofSide=0;
     while(x<NEON_HALF_X){
-      const w=sr(9,15),towerH=sr(26,52),towerIn=sr(0.8,1.8);
+      const w=sr(9,15);
       const x0=NEON_OX+x,x1=Math.min(NEON_OX+NEON_HALF_X,x0+w);
       const z0=sign<0?outerFace:innerFace,z1=sign<0?innerFace:outerFace;
       const col=NEON_FACADE_COLS[Math.floor(srand()*NEON_FACADE_COLS.length)];
       addBox(x0,NEON_GROUND,z0,x1,NEON_GROUND+NEON_PODIUM_H,z1,col);
-      addBox(x0-0.25,NEON_GROUND+NEON_PODIUM_H,z0-0.25,x1+0.25,NEON_GROUND+NEON_PODIUM_H+0.25,z1+0.25,0x1a1c20);
-      const tx0=x0+towerIn,tx1=x1-towerIn;
-      if(tx1>tx0+1.5) addBox(tx0,NEON_GROUND+NEON_PODIUM_H+0.25,z0,tx1,NEON_GROUND+towerH,z1,NEON_FACADE_COLS[Math.floor(srand()*NEON_FACADE_COLS.length)]);
+      addBox(x0-0.2,NEON_GROUND+NEON_PODIUM_H,z0-0.2,x1+0.2,NEON_GROUND+NEON_PODIUM_H+0.2,z1+0.2,0x1a1c20);
       NEON_PROPS.push({x0,x1,z0,z1,type:'building'});
       const roofY=NEON_GROUND+NEON_PODIUM_H,runW=x1-x0;
       const innerZ=sign<0?z1:z0,faceRot=sign<0?0:Math.PI;
@@ -1854,8 +1939,8 @@ function buildNeonAlleyMap(){
       let stairBase=null,stairMidX=null,climbable=false;
       if(runW>=11&&srand()<0.75){
         climbable=true;
-        const stepRun=0.3,stairDepth=1.3,dirX=(x0+x1)/2<NEON_OX?-1:1;
-        const runLen=Math.min(runW-1.4,11),nSteps=Math.max(6,Math.floor(runLen/stepRun)),rise=NEON_PODIUM_H/nSteps;
+        const stepRun=0.26,stairDepth=1.2,dirX=(x0+x1)/2<NEON_OX?-1:1;
+        const runLen=Math.min(runW-1.4,6.5),nSteps=Math.max(6,Math.floor(runLen/stepRun)),rise=NEON_PODIUM_H/nSteps;
         const xStart=dirX>0?x0+0.7:x1-0.7,outFace=innerZ-sign*stairDepth,rz0=Math.min(outFace,outFace-0.16),rz1=Math.max(outFace,outFace-0.16);
         for(let i=1;i<=nSteps;i++){
           const xa=xStart+dirX*(i-1)*stepRun,xb=xStart+dirX*i*stepRun,topY=NEON_GROUND+i*rise;
@@ -1868,44 +1953,94 @@ function buildNeonAlleyMap(){
       // low guard rail along the roof's alley-facing edge - visual + a lane marker rather than a hard
       // collider, same treatment as the rooftop catwalk's own side rails
       {
-        const ra=innerZ,rb=innerZ-sign*0.14;
-        addBox(x0,roofY,Math.min(ra,rb),x1,roofY+0.9,Math.max(ra,rb),0x14151a,{collide:false});
+        const ra=innerZ,rb=innerZ-sign*0.12;
+        addBox(x0,roofY,Math.min(ra,rb),x1,roofY+0.85,Math.max(ra,rb),0x14151a,{collide:false});
+      }
+      // a super-tall, non-climbable tower rises off the back of the low roof - the actual arena
+      // boundary/skyline, stepped back and lit with a tiled grid of windows, with a real chance of a
+      // giant Dotonbori-style billboard on the ones facing the lane
+      {
+        const towerIn=sr(0.5,1.3),towerH=sr(34,64),tx0=x0+towerIn,tx1=x1-towerIn;
+        if(tx1>tx0+1.5){
+          addBox(tx0,roofY+0.15,z0,tx1,NEON_GROUND+towerH,z1,NEON_FACADE_COLS[Math.floor(srand()*NEON_FACADE_COLS.length)]);
+          neonTowerFace((tx0+tx1)/2,roofY+0.15+(towerH-NEON_PODIUM_H-0.15)/2,innerZ+sign*0.04,tx1-tx0,towerH-NEON_PODIUM_H-0.15,faceRot);
+          if(srand()<0.24){
+            const text=NEON_TEXT_POOL[Math.floor(srand()*NEON_TEXT_POOL.length)],col=NEON_SIGN_COLS[Math.floor(srand()*NEON_SIGN_COLS.length)];
+            const bw=Math.min(tx1-tx0-0.6,sr(3.2,5.2)),bh=sr(3.6,6.4),by=roofY+3+sr(0,Math.max(0,towerH-NEON_PODIUM_H-bh-3));
+            neonSign((tx0+tx1)/2,by,innerZ+sign*0.09,bw,bh,0,col,text);
+            neonGlow((tx0+tx1)/2,by,innerZ+sign*1.8,col,1.1,13);
+          }
+        }
       }
       segs.push({x0,x1,z0,z1,roofY,stairBase,climbable});
-      // signage: big, flat rectangular neon panels mounted on the podium face itself - down where the
-      // stairs and the buildings actually are, never up on the tall tower/skyline "boundary wall" -
-      // with roughly a third jutting out on a short bracket for the overhanging-signboard look real
-      // alley photos have. Climbable segments also get one mounted right beside their own stair.
-      const signN=2+(srand()<0.6?1:0);
+      // signage: dense, human-scaled-but-generous neon panels, several per segment, mounted flush on
+      // the podium face - matched up in size against the dense Kabuki-cho-style reference photos
+      const signN=3+(srand()<0.6?1:0);
       for(let k=0;k<signN;k++){
         const text=NEON_TEXT_POOL[Math.floor(srand()*NEON_TEXT_POOL.length)],col=NEON_SIGN_COLS[Math.floor(srand()*NEON_SIGN_COLS.length)];
-        const sx=x0+sr(1.4,Math.max(1.6,runW-1.4)),sy=NEON_GROUND+sr(2.4,NEON_PODIUM_H-1.4);
-        if(srand()<0.65){
-          const sw=sr(2.0,3.2),sh=sr(3.4,5.2);
+        const sx=x0+sr(1.0,Math.max(1.2,runW-1.0)),sy=NEON_GROUND+sr(1.3,NEON_PODIUM_H-0.5);
+        if(srand()<0.6){
+          const sw=sr(1.1,1.9),sh=sr(1.6,2.6);
           neonSign(sx,sy,innerZ+sign*0.06,sw,sh,0,col,text);
         } else {
-          const jut=sr(0.9,1.6),sw=sr(1.6,2.6),sh=sr(0.8,1.3);
+          const jut=sr(0.7,1.3),sw=sr(1.1,1.9),sh=sr(0.7,1.1);
           neonSign(sx,sy,innerZ+sign*jut,sw,sh,faceRot+Math.PI/2,col,text);
         }
-        if(srand()<0.3) neonGlow(sx,sy,innerZ+sign*1.7,col,1.0,12);
+        if(srand()<0.3) neonGlow(sx,sy,innerZ+sign*1.4,col,0.8,9);
+      }
+      // a sign hung right in the seam with the previous segment, jutting out enough to visually
+      // straddle both building faces - "벽에도 걸쳐있도록", the gap-spanning look the reference photo's
+      // corner signage has, instead of every sign sitting mid-face
+      if(x>-NEON_HALF_X+0.5){
+        const text=NEON_TEXT_POOL[Math.floor(srand()*NEON_TEXT_POOL.length)],col=NEON_SIGN_COLS[Math.floor(srand()*NEON_SIGN_COLS.length)];
+        neonSign(x0,NEON_GROUND+sr(1.4,NEON_PODIUM_H-0.6),innerZ+sign*sr(0.8,1.3),sr(1.0,1.6),sr(0.9,1.5),faceRot+Math.PI/2,col,text);
       }
       if(climbable){
         const text=NEON_TEXT_POOL[Math.floor(srand()*NEON_TEXT_POOL.length)],col=NEON_SIGN_COLS[Math.floor(srand()*NEON_SIGN_COLS.length)];
-        const sx=clamp(stairMidX,x0+1.3,x1-1.3),sy=NEON_GROUND+sr(3.5,5.6);
-        neonSign(sx,sy,innerZ+sign*sr(1.0,1.6),sr(1.3,2.0),sr(2.4,3.4),faceRot+Math.PI/2,col,text);
-        if(srand()<0.4) neonGlow(sx,sy,innerZ+sign*1.8,col,1.0,10);
+        const sx=clamp(stairMidX,x0+0.9,x1-0.9),sy=NEON_GROUND+sr(2.0,NEON_PODIUM_H-0.4);
+        neonSign(sx,sy,innerZ+sign*sr(0.7,1.1),sr(0.7,1.1),sr(1.1,1.6),faceRot+Math.PI/2,col,text);
+        if(srand()<0.4) neonGlow(sx,sy,innerZ+sign*1.3,col,0.8,8);
       }
-      // AC condensers + a vertical pipe run, scattered up the podium face - the exposed-utility
-      // clutter that reads as "real back-street" rather than a clean showroom wall
+      // AC condensers + a vertical pipe run, scattered up the podium face
       for(let k=0;k<1+Math.floor(srand()*2);k++){
-        const ax=x0+sr(1,Math.max(1.2,runW-1)),ay=NEON_GROUND+sr(1.6,NEON_PODIUM_H-1.2);
+        const ax=x0+sr(1,Math.max(1.2,runW-1)),ay=NEON_GROUND+sr(0.9,NEON_PODIUM_H-0.7);
         neonACUnit(ax,ay,innerZ+sign*0.22,faceRot);
       }
-      if(srand()<0.7) neonPipe(x0+sr(0.6,1.4),innerZ+sign*0.1,NEON_GROUND,NEON_GROUND+NEON_PODIUM_H-0.5);
-      // a vending machine recessed against the wall roughly every other segment
-      if(srand()<0.45){
-        const vx=x0+sr(1.2,Math.max(1.4,runW-1.2));
-        neonVending(vx,innerZ+sign*0.4,faceRot);
+      if(srand()<0.7) neonPipe(x0+sr(0.6,1.4),innerZ+sign*0.1,NEON_GROUND,NEON_GROUND+NEON_PODIUM_H-0.3);
+      // a vending machine PAIR recessed against the wall, or a magazine stand, on a chunk of segments
+      const r=srand();
+      if(r<0.28){
+        const vx=x0+sr(1.4,Math.max(1.6,runW-1.4));
+        neonVendingPair(vx,innerZ+sign*0.4,faceRot);
+      } else if(r<0.42){
+        const mx=x0+sr(0.8,Math.max(1,runW-0.8));
+        neonMagazineStand(mx,innerZ+sign*0.32,faceRot);
+      }
+      // beverage crates leaned against the wall, occasionally
+      if(srand()<0.3){
+        const dx=x0+sr(0.7,Math.max(0.9,runW-0.7));
+        neonDrinkCrates(dx,innerZ+sign*0.25,faceRot);
+      }
+      // a couple of torn flyers pasted straight onto the wall
+      for(let k=0;k<1+Math.floor(srand()*2);k++){
+        const fx=x0+sr(0.5,Math.max(0.7,runW-0.5)),fy=NEON_GROUND+sr(0.7,1.7);
+        neonFlyer(fx,fy,innerZ+sign*0.045,faceRot,sr(-0.25,0.25));
+      }
+      // rooftop cover: real, human-scaled cover on the roof itself, pushed to one side (alternating
+      // which side segment to segment) so there's always a clear walking lane down the other side
+      // instead of a wall blocking the whole terrace
+      if(runW>=9&&srand()<0.7){
+        const depth=NEON_HALF_Z-NEON_ALLEY_HALF_Z,toward=roofSide%2===0;
+        const baseZ=toward?innerZ+sign*(depth*0.62):innerZ+sign*(depth*0.22);
+        roofSide++;
+        if(srand()<0.3){
+          neonMagazineStand(x0+sr(1.2,Math.max(1.6,runW-1.2)),baseZ,faceRot);
+        } else {
+          const n=2+Math.floor(srand()*2);
+          for(let k=0;k<n;k++){
+            neonBoxPile(x0+sr(1.0,Math.max(1.4,runW-1.0)),baseZ+sr(-0.7,0.7),true,roofY);
+          }
+        }
       }
       x+=(x1-x0)+sr(0.3,1.1);
     }
@@ -1926,15 +2061,25 @@ function buildNeonAlleyMap(){
     const s=nearestClimbable(southSegs,NEON_OX+cx),n=nearestClimbable(northSegs,NEON_OX+cx);
     if(s&&n) neonCatwalk(s,n);
   }
+  // the two ends of the corridor are closed off with the same super-tall skyline treatment as the
+  // long sides - "좌우 앞뒤 경계는 초고층 건물로"
   const endWall=(sign)=>{
     const faceX=NEON_OX+sign*NEON_HALF_X;
     let z=-NEON_HALF_Z;
     while(z<NEON_HALF_Z){
-      const w=sr(8,13),h=sr(30,54),d=sr(7,10);
+      const w=sr(8,13),h=sr(34,64),d=sr(7,10);
       const z0=NEON_OZ+z,z1=Math.min(NEON_OZ+NEON_HALF_Z,z0+w);
       const x0=sign<0?faceX-d:faceX,x1=sign<0?faceX:faceX+d;
       addBox(x0,NEON_GROUND,z0,x1,NEON_GROUND+h,z1,NEON_FACADE_COLS[Math.floor(srand()*NEON_FACADE_COLS.length)]);
       NEON_PROPS.push({x0,x1,z0,z1,type:'building'});
+      const faceXw=sign<0?x1:x0,rot=sign<0?Math.PI/2:-Math.PI/2;
+      neonTowerFace(faceXw+sign*0.04,NEON_GROUND+h/2,(z0+z1)/2,z1-z0,h,rot);
+      if(srand()<0.3){
+        const text=NEON_TEXT_POOL[Math.floor(srand()*NEON_TEXT_POOL.length)],col=NEON_SIGN_COLS[Math.floor(srand()*NEON_SIGN_COLS.length)];
+        const bw=Math.min(z1-z0-0.6,sr(3.2,5.2)),bh=sr(3.6,6.4),by=sr(6,Math.max(6,h-bh-4));
+        neonSign(faceXw+sign*0.08,by,(z0+z1)/2,bw,bh,rot,col,text);
+        neonGlow(faceXw+sign*1.6,by,(z0+z1)/2,col,1.1,13);
+      }
       z+=(z1-z0)+sr(0.3,1);
     }
   };
@@ -1943,7 +2088,7 @@ function buildNeonAlleyMap(){
   // original arena's bunkers) recessed against its own end wall. No rooftop machine gun for either
   // base for now.
   function neonBase(localX,team){
-    const bx=NEON_OX+localX,bz=NEON_OZ,bw=8,bd=NEON_ALLEY_HALF_Z*2,bh=5,wt=0.5;
+    const bx=NEON_OX+localX,bz=NEON_OZ,bw=8,bd=NEON_ALLEY_HALF_Z*2,bh=4.6,wt=0.5;
     const x0=bx-bw/2,x1=bx+bw/2,z0=bz-bd/2,z1=bz+bd/2,y0=NEON_GROUND,y1=NEON_GROUND+bh,col=0x1a1c20,tc=NEON_TEAM_COL_MAP[team];
     addBox(x0,y0,z0,x1,y1,z0+wt,col);addBox(x0,y0,z1-wt,x1,y1,z1,col);
     addBox(x0,y0,z0,x0+wt,y1,z1,col);addBox(x1-wt,y0,z0,x1,y1,z1,col);
@@ -1962,36 +2107,44 @@ function buildNeonAlleyMap(){
   NEON_MGS=[];
   neonGlow(nb0.x,nb0.roofY+1.4,nb0.z,NEON_TEAM_COL_MAP[0],1.0,14);
   neonGlow(nb1.x,nb1.roofY+1.4,nb1.z,NEON_TEAM_COL_MAP[1],1.0,14);
-  // ground-level clutter down the open centre lane: street vendor carts, cardboard box piles and
-  // illegally parked cars for cover, plus the odd crate stack/dumpster for variety. Kept clear of both
+  // ground-level clutter down the open centre lane: street vendor carts, cardboard box piles,
+  // illegally parked cars, crates, dumpsters and beverage-crate stacks for cover. Kept clear of both
   // the podium walls' own footprint and each team's spawn scatter (frontSpawns lands at roughly
   // x=BASE_DX-8..BASE_DX-5 either side of centre) - the |lx|<=16 range here keeps a clear margin from
   // both.
   let ci=0;
   for(let lx=-16;lx<=16;lx+=sr(2.0,2.9)){
-    const cx=NEON_OX+lx,cz=NEON_OZ+sr(-5.5,5.5),kind=ci%5;
+    const cx=NEON_OX+lx,cz=NEON_OZ+sr(-5.5,5.5),kind=ci%7;
     if(kind===0) neonCart(cx,cz,sr(0,Math.PI*2));
     else if(kind===1) neonBoxPile(cx,cz);
-    else if(kind===2) neonParkedCar(cx,cz,sr(0,Math.PI*2));
+    else if(kind===2||kind===6) neonParkedCar(cx,cz,sr(0,Math.PI*2));
     else if(kind===3) neonCrate(cx,cz);
-    else neonDumpster(cx,cz,Math.floor(srand()*2));
+    else if(kind===4) neonDumpster(cx,cz,Math.floor(srand()*2));
+    else neonDrinkCrates(cx,cz,sr(0,Math.PI*2));
     ci++;
   }
-  // utility poles: a loose run down both sides of the alley, right at the building's inner face, plus
-  // a pair framing each end of the corridor
+  // combined utility pole + street lamp, Korean cobra-head style: a dense run down both sides of the
+  // alley (right at the building's inner face) with consecutive poles strung together by wire, plus a
+  // pair framing each end of the corridor. Their own warm-white lamps are now the lane's main night
+  // light source alongside the neon signs, per feedback.
   for(const sign of [-1,1]){
-    for(let x=-NEON_HALF_X+10;x<NEON_HALF_X-6;x+=sr(16,22)){
-      neonUtilityPole(NEON_OX+x,NEON_OZ+sign*(NEON_ALLEY_HALF_Z+0.7),0);
+    let prev=null;
+    for(let x=-NEON_HALF_X+8;x<NEON_HALF_X-6;x+=sr(7,9)){
+      // -0.6, not +0.6: that used to push the pole 0.6 into the building's own footprint (the podium
+      // starts exactly at NEON_ALLEY_HALF_Z), reading as the pole and the rooftop overlapping. This
+      // keeps it in the open lane, just off the kerb.
+      const p=neonPoleLamp(NEON_OX+x,NEON_OZ+sign*(NEON_ALLEY_HALF_Z-0.6),sign<0?-Math.PI/2:Math.PI/2);
+      if(prev) neonWireSpan(prev,p);
+      prev=p;
+      if(srand()<0.5){
+        const fa=srand()*Math.PI*2;
+        neonFlyer(NEON_OX+x+Math.sin(fa)*0.16,sr(0.6,1.5),NEON_OZ+sign*(NEON_ALLEY_HALF_Z-0.6)+Math.cos(fa)*0.16,fa,sr(-0.2,0.2));
+      }
     }
   }
   for(const fx of [-NEON_HALF_X+2.4,NEON_HALF_X-2.4]){
-    neonUtilityPole(NEON_OX+fx,NEON_OZ-(NEON_ALLEY_HALF_Z-1),Math.PI/2);
-    neonUtilityPole(NEON_OX+fx,NEON_OZ+(NEON_ALLEY_HALF_Z-1),Math.PI/2);
-  }
-  // street lamps down the open lane - a cool white ground-level light on top of the dim night
-  // ambience, alternating sides so the corridor doesn't read as a single lit-up line
-  for(let x=-NEON_HALF_X+8;x<NEON_HALF_X-6;x+=sr(14,18)){
-    neonStreetlamp(NEON_OX+x,NEON_OZ+(srand()<0.5?-1:1)*sr(3,6));
+    neonPoleLamp(NEON_OX+fx,NEON_OZ-(NEON_ALLEY_HALF_Z-1),fx<0?0:Math.PI);
+    neonPoleLamp(NEON_OX+fx,NEON_OZ+(NEON_ALLEY_HALF_Z-1),fx<0?0:Math.PI);
   }
   const frontSpawns=(localX,face)=>{const pts=[];for(let i=0;i<18;i++)pts.push({x:NEON_OX+localX+face*sr(5,8),z:NEON_OZ+sr(-7,7)});return pts;};
   NEON_SPAWN=[
@@ -5325,12 +5478,12 @@ function updateArenaAmbience(){
   if(wantNight===arenaNight) return;
   arenaNight=wantNight;
   if(wantNight){
-    scene.background.setHex(0x0a0d16);
-    scene.fog.color.setHex(0x0a0d16);scene.fog.near=60;scene.fog.far=260;
+    scene.background.setHex(0x030308);
+    scene.fog.color.setHex(0x030308);scene.fog.near=45;scene.fog.far=200;
     sky.visible=false;
-    hemi.intensity=0.44;hemi.color.setHex(0x3d5a86);hemi.groundColor.setHex(0x1a1a26);
-    ambLight.intensity=0.2;
-    sun.intensity=0.16;
+    hemi.intensity=0.16;hemi.color.setHex(0x24304a);hemi.groundColor.setHex(0x0a0a10);
+    ambLight.intensity=0.06;
+    sun.intensity=0.04;
   } else {
     scene.background.setHex(HORIZON);
     scene.fog.color.setHex(HORIZON);scene.fog.near=150;scene.fog.far=640;
